@@ -14,6 +14,25 @@ pnpm dev
 bun dev
 ```
 
+
+// src/app/chat/page.tsx
+import { authOptions } from "../api/auth/[...nextauth]/route";
+import { getServerSession } from "next-auth";
+
+export default async function ChatPage() {
+  const session = await getServerSession(authOptions);
+
+  return (
+    <div className="p-10">
+      <h1 className="text-2xl font-bold">Welcome to the Team Chatbot</h1>
+      <p className="mt-4 text-lg">Name: {session?.user?.name}</p>
+      <p className="text-lg">Email: {session?.user?.email}</p>
+    </div>
+  );
+}
+
+
+
 Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
 You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
