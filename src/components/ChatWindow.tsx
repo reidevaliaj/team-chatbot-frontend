@@ -28,7 +28,7 @@ export const ChatWindow = () => {
 
   useEffect(() => {
     const fetchMessages = async () => {
-      const res = await fetch('http://localhost:8000/messages');
+      const res = await fetch('https://team-chatbot-backend.onrender.com/messages');
       const data = await res.json();
       const formatted = data.map((msg: RawMessage) => ({
         id: msg.id,
@@ -52,7 +52,7 @@ export const ChatWindow = () => {
       content: text,
     };
 
-    const res = await fetch('http://localhost:8000/messages', {
+    const res = await fetch('https://team-chatbot-backend.onrender.com/messages', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
