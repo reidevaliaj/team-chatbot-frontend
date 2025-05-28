@@ -17,9 +17,14 @@ export const authOptions = {
     async session({ session }: { session: Session }) {
       return session;
     },
+      async redirect({ url, baseUrl }: any) {
+      // Always redirect to /chat after login
+      return `${baseUrl}/chat`;
+    },
   },
 };
 
 const handler = NextAuth(authOptions);
 
 export { handler as GET, handler as POST };
+
