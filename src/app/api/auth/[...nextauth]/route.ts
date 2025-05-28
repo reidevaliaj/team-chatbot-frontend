@@ -1,4 +1,4 @@
-import NextAuth from "next-auth";
+import NextAuth, { Session } from "next-auth";
 import AzureADProvider from "next-auth/providers/azure-ad";
 
 export const authOptions = {
@@ -14,7 +14,7 @@ export const authOptions = {
     signIn: "/auth/signin",
   },
   callbacks: {
-    async session({ session }: any) {
+    async session({ session }: { session: Session }) {
       return session;
     },
   },

@@ -3,7 +3,7 @@ import React, { useEffect, useState } from 'react';
 import { useSession } from 'next-auth/react';
 import { MessageBubble } from './MessageBubble';
 import { ChatInput } from './ChatInput';
-import { Users, TrendingUp } from 'lucide-react';
+
 
 interface Message {
   id: number;
@@ -11,6 +11,13 @@ interface Message {
   sender: string;
   timestamp: string;
   isOwn: boolean;
+}
+
+interface RawMessage {
+  id: number;
+  content: string;
+  sender_name: string;
+  created_at: string;
 }
 
 export const ChatWindow = () => {
@@ -23,7 +30,7 @@ export const ChatWindow = () => {
     const fetchMessages = async () => {
       const res = await fetch('http://localhost:8000/messages');
       const data = await res.json();
-      const formatted = data.map((msg: any) => ({
+      const formatted = data.map((msg: RawMessage) => ({
         id: msg.id,
         text: msg.content,
         sender: msg.sender_name,
