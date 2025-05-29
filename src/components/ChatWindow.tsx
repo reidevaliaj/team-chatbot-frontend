@@ -53,6 +53,7 @@ export const ChatWindow = () => {
     socket.current = ws;
 
     ws.onmessage = (event) => {
+      console.log('WebSocket message received:', event.data);
       const messageData = JSON.parse(event.data);
       const newMessage: Message = {
         id: messageData.id || Date.now(), // fallback if no id
