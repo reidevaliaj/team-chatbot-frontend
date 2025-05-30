@@ -54,7 +54,7 @@ export const ChatSidebar = () => {
       {/* Sidebar Header */}
       <div className="p-6 border-b border-gray-200">
         <h2 className="text-lg font-bold text-gray-900 mb-2">Knowledge Hub</h2>
-        <p className="text-sm text-gray-600">Financial collaboration space</p>
+        <p className="text-sm text-gray-600">Financial collaboration space 2</p>
 
         <div className="text-xs text-gray-500 truncate">
           <SignOutButton />

@@ -46,36 +46,46 @@ export const ChatWindow = () => {
   }, [session]);
 
   // Connect to WebSocket
-  useEffect(() => {
-    if (status !== 'authenticated') return;
+useEffect(() => {
+  if (status !== 'authenticated') return;
 
-    const ws = new WebSocket('wss://team-chatbot-backend.fly.dev/ws/chat');
-    socket.current = ws;
+  const ws = new WebSocket(
+    process.env.NODE_ENV === 'production'
+      ? 'wss://team-chatbot-backend.fly.dev/ws/chat'
+      : 'ws://localhost:8000/ws/chat'
+  );
+  socket.current = ws;
 
-    ws.onmessage = (event) => {
-      console.log('WebSocket message received:', event.data);
-      const messageData = JSON.parse(event.data);
-      const newMessage: Message = {
-        id: messageData.id || Date.now(), // fallback if no id
-        text: messageData.content,
-        sender: messageData.sender_name,
-        timestamp: new Date().toLocaleTimeString([], {
-          hour: '2-digit',
-          minute: '2-digit',
-        }),
-        isOwn: messageData.sender_name === session?.user?.name,
-      };
-      setMessages((prev) => [...prev, newMessage]);
+  ws.onopen = () => console.log('WebSocket connected');
+
+  ws.onmessage = (event) => {
+    console.log('WebSocket message received:', event.data);
+    const messageData = JSON.parse(event.data);
+    const newMessage: Message = {
+      id: messageData.id || Date.now(),
+      text: messageData.content,
+      sender: messageData.sender_name,
+      timestamp: new Date().toLocaleTimeString([], {
+        hour: '2-digit',
+        minute: '2-digit',
+      }),
+      isOwn: messageData.sender_name === session?.user?.name,
     };
+    setMessages((prev) => [...prev, newMessage]);
+  };
 
-    ws.onclose = () => {
-      console.log('WebSocket disconnected');
-    };
+  ws.onerror = (err) => {
+    console.error("WebSocket error", err);
+  };
 
-    return () => {
-      ws.close();
-    };
-  }, [status, session?.user?.name]);
+  ws.onclose = () => {
+    console.log('WebSocket disconnected');
+  };
+
+  return () => {
+    ws.close();
+  };
+}, [status, session?.user?.name]);
 
   // Send message
   const handleSendMessage = async (text: string) => {
