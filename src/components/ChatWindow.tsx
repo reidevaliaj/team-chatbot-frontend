@@ -1,5 +1,5 @@
 'use client';
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { useSession } from 'next-auth/react';
 import { MessageBubble } from './MessageBubble';
 import { ChatInput } from './ChatInput';
@@ -34,46 +34,49 @@ export const ChatWindow = () => {
   const [messages, setMessages] = useState<Message[]>([]);
   const socket = useRef<WebSocket | null>(null);
 
-  //
-  // 3) Handle sending a voice note blob
-  //
-  const handleSendVoiceNote = async (audioBlob: Blob) => {
-    if (!session?.user?.name) return;
+  // Base URL for backend (must be set in .env.local)
+  const BACKEND_BASE = process.env.NEXT_PUBLIC_BACKEND_URL!;
 
-    const formData = new FormData();
-    formData.append('sender_name', session.user.name);
-    formData.append('voice_file', audioBlob, `voice_${Date.now()}.webm`);
+  //
+  // 3) Handle sending a voice note blob (useCallback for stability)
+  //
+  const handleSendVoiceNote = useCallback(
+    async (audioBlob: Blob) => {
+      if (!session?.user?.name) return;
 
-    // POST to /voice_notes
-    const res = await fetch(
-      'https://team-chatbot-backend.fly.dev/voice_notes',
-      {
+      const formData = new FormData();
+      formData.append('sender_name', session.user.name);
+      formData.append('voice_file', audioBlob, `voice_${Date.now()}.webm`);
+
+      // POST to /voice_notes
+      const res = await fetch(`${BACKEND_BASE}/voice_notes`, {
         method: 'POST',
         body: formData,
+      });
+
+      if (!res.ok) {
+        console.error('Failed to upload voice note:', await res.text());
+        return;
       }
-    );
 
-    if (!res.ok) {
-      console.error('Failed to upload voice note:', await res.text());
-      return;
-    }
+      // Expecting `{ id, sender_name, voice_url, created_at, type: 'voice' }`
+      const saved = await res.json();
 
-    // Expecting `{ id, sender_name, voice_url, timestamp, type: 'voice' }`
-    const saved = await res.json();
-
-    // Broadcast over WebSocket
-    if (socket.current?.readyState === WebSocket.OPEN) {
-      socket.current.send(
-        JSON.stringify({
-          type: 'voice',
-          id: saved.id,
-          sender_name: saved.sender_name,
-          voice_url: saved.voice_url,
-          created_at: saved.timestamp,
-        })
-      );
-    }
-  };
+      // Broadcast over WebSocket
+      if (socket.current?.readyState === WebSocket.OPEN) {
+        socket.current.send(
+          JSON.stringify({
+            type: 'voice',
+            id: saved.id,
+            sender_name: saved.sender_name,
+            voice_url: saved.voice_url,
+            created_at: saved.created_at,
+          })
+        );
+      }
+    },
+    [session?.user?.name, BACKEND_BASE]
+  );
 
   //
   // 4) Load initial messages (both text & voice)
@@ -81,9 +84,7 @@ export const ChatWindow = () => {
   useEffect(() => {
     const fetchMessages = async () => {
       try {
-        const res = await fetch(
-          'https://team-chatbot-backend.fly.dev/messages'
-        );
+        const res = await fetch(`${BACKEND_BASE}/messages`);
         if (!res.ok) {
           console.error('Failed to fetch messages:', res.statusText);
           return;
@@ -104,7 +105,7 @@ export const ChatWindow = () => {
               timestamp: timeString,
               isOwn,
               type: 'voice',
-              voiceUrl: msg.voice_url,
+              voiceUrl: `${BACKEND_BASE}${msg.voice_url}`,
             };
           } else {
             // Fallback: assume msg.type === 'text'
@@ -128,7 +129,7 @@ export const ChatWindow = () => {
     if (session) {
       fetchMessages();
     }
-  }, [session]);
+  }, [session, BACKEND_BASE]);
 
   //
   // 5) WebSocket connection & onmessage
@@ -171,7 +172,7 @@ export const ChatWindow = () => {
             timestamp: timeString,
             isOwn,
             type: 'voice',
-            voiceUrl: messageData.voice_url,
+            voiceUrl: `${BACKEND_BASE}${messageData.voice_url}`,
           };
         } else {
           // Default to text case
@@ -202,43 +203,44 @@ export const ChatWindow = () => {
     return () => {
       ws.close();
     };
-  }, [status, session?.user?.name]);
+  }, [status, session?.user?.name, BACKEND_BASE]);
 
   //
-  // 6) Handle sending a text message
+  // 6) Handle sending a text message (useCallback for stability)
   //
-  const handleSendMessage = async (text: string) => {
-    if (!session?.user?.name) return;
+  const handleSendMessage = useCallback(
+    async (text: string) => {
+      if (!session?.user?.name) return;
 
-    const newMessagePayload = {
-      sender_name: session.user.name,
-      content: text,
-    };
+      const newMessagePayload = {
+        sender_name: session.user.name,
+        content: text,
+        type: 'text',
+      };
 
-    try {
-      const res = await fetch(
-        'https://team-chatbot-backend.fly.dev/messages',
-        {
+      try {
+        const res = await fetch(`${BACKEND_BASE}/messages`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(newMessagePayload),
+        });
+        if (!res.ok) {
+          console.error('Failed to send text message:', await res.text());
+          return;
         }
-      );
-      if (!res.ok) {
-        console.error('Failed to send text message:', await res.text());
-        return;
-      }
 
-      const saved = await res.json();
-      // Assume backend returns e.g. { id, sender_name, content, created_at, type: 'text' }
+        const saved = await res.json();
+        // Assume backend returns { id, sender_name, content, created_at, type: 'text' }
 
-      if (socket.current?.readyState === WebSocket.OPEN) {
-        socket.current.send(JSON.stringify(saved));
+        if (socket.current?.readyState === WebSocket.OPEN) {
+          socket.current.send(JSON.stringify(saved));
+        }
+      } catch (err) {
+        console.error('Error in handleSendMessage:', err);
       }
-    } catch (err) {
-      console.error('Error in handleSendMessage:', err);
-    }
-  };
+    },
+    [session?.user?.name, BACKEND_BASE]
+  );
 
   if (status === 'loading') {
     return <div className="p-4">Loading...</div>;
@@ -258,10 +260,12 @@ export const ChatWindow = () => {
         ))}
       </div>
 
-      <ChatInput
-        onSendMessage={handleSendMessage}
-        onSendVoice={handleSendVoiceNote}
-      />
+      <div className="sticky bottom-0">
+        <ChatInput
+          onSendMessage={handleSendMessage}
+          onSendVoice={handleSendVoiceNote}
+        />
+      </div>
     </div>
   );
 };
