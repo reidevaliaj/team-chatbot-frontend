@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { useRef, useState, useEffect } from 'react';
+import { Play, Pause } from 'lucide-react';
 
 //
 // 1) Extend Message interface to include both text and voice fields
@@ -27,11 +28,39 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
       .slice(0, 2);
   };
 
+  // For voice messages: keep track of playback state
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const [isPlaying, setIsPlaying] = useState(false);
+
+  // Cleanup on unmount: pause audio if it's still playing
+  useEffect(() => {
+    return () => {
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current.currentTime = 0;
+      }
+    };
+  }, []);
+
+  const togglePlayback = () => {
+    if (!audioRef.current) return;
+
+    if (isPlaying) {
+      audioRef.current.pause();
+    } else {
+      audioRef.current.play();
+    }
+    setIsPlaying(!isPlaying);
+  };
+
+  // When the audio naturally ends, reset to “not playing”
+  const handleEnded = () => {
+    setIsPlaying(false);
+  };
+
   return (
     <div className={`flex ${message.isOwn ? 'justify-end' : 'justify-start'} mb-4`}>
-      <div
-        className={`flex ${message.isOwn ? 'flex-row-reverse' : 'flex-row'} items-end max-w-xs lg:max-w-md`}
-      >
+      <div className={`flex ${message.isOwn ? 'flex-row-reverse' : 'flex-row'} items-end max-w-xs lg:max-w-md`}>
         {/* Other User’s Avatar */}
         {!message.isOwn && (
           <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-600 to-green-600 flex items-center justify-center text-white text-xs font-semibold mr-2 mb-1">
@@ -57,20 +86,33 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
             }`}
           >
             {message.type === 'voice' && message.voiceUrl ? (
-              <audio controls src={message.voiceUrl} className="w-full mb-1">
-                Your browser does not support the audio element.
-              </audio>
+              <div className="flex items-center space-x-2">
+                {/* Hidden <audio> element: playback is controlled via the button below */}
+                <audio
+                  ref={audioRef}
+                  src={message.voiceUrl}
+                  onEnded={handleEnded}
+                  className="hidden"
+                />
+                {/* Play/Pause Button */}
+                <button
+                  onClick={togglePlayback}
+                  className="p-2 rounded-full bg-gray-100 hover:bg-gray-200 transition-colors"
+                >
+                  {isPlaying ? <Pause size={20} /> : <Play size={20} />}
+                </button>
+                <span className="text-xs text-gray-600">
+                  {message.timestamp}
+                </span>
+              </div>
             ) : (
-              <p className="text-sm leading-relaxed">{message.text}</p>
+              <>
+                <p className="text-sm leading-relaxed">{message.text}</p>
+                <p className={`text-xs mt-1 ${message.isOwn ? 'text-blue-100' : 'text-gray-500'}`}>
+                  {message.timestamp}
+                </p>
+              </>
             )}
-
-            <p
-              className={`text-xs mt-1 ${
-                message.isOwn ? 'text-blue-100' : 'text-gray-500'
-              }`}
-            >
-              {message.timestamp}
-            </p>
           </div>
         </div>
 

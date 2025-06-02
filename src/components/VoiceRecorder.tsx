@@ -6,36 +6,44 @@ interface VoiceRecorderProps {
   onSave: (file: Blob) => void;
 }
 
-const InnerRecorder: React.FC<VoiceRecorderProps> = ({ onSave }) => {
+export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({ onSave }) => {
   const [isRecording, setIsRecording] = useState(false);
   const [permissionGranted, setPermissionGranted] = useState(false);
 
+  // Refs to hold the MediaStream and MediaRecorder
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const streamRef = useRef<MediaStream | null>(null);
 
   const startRecording = async () => {
     try {
-      if (!permissionGranted) {
+      // 1) If we don’t already have a stream, ask for user permission now
+      if (!permissionGranted || !streamRef.current) {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
         streamRef.current = stream;
         setPermissionGranted(true);
       }
       if (!streamRef.current) return;
 
+      // 2) Clear any old chunks
       audioChunksRef.current = [];
+
+      // 3) Create a new MediaRecorder on that stream
       const options = { mimeType: 'audio/webm; codecs=opus', audioBitsPerSecond: 96000 };
       const recorder = new MediaRecorder(streamRef.current, options);
 
+      // 4) On dataavailable, collect chunks
       recorder.ondataavailable = (event: BlobEvent) => {
         audioChunksRef.current.push(event.data);
       };
 
+      // 5) On stop, assemble the Blob and fire onSave
       recorder.onstop = () => {
         const blob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
         onSave(blob);
       };
 
+      // 6) Save to ref and start
       mediaRecorderRef.current = recorder;
       recorder.start();
       setIsRecording(true);
@@ -47,14 +55,30 @@ const InnerRecorder: React.FC<VoiceRecorderProps> = ({ onSave }) => {
 
   const stopRecording = () => {
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      // 1) Instruct the recorder to stop and finalize the Blob
       mediaRecorderRef.current.stop();
       setIsRecording(false);
+
+      // 2) Now also stop every track in the MediaStream so the mic is released
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach((track) => {
+          track.stop();
+        });
+        streamRef.current = null;
+        setPermissionGranted(false);
+      }
+
+      // 3) Clear out the MediaRecorder ref
+      mediaRecorderRef.current = null;
     }
   };
 
   const toggleRecording = () => {
-    if (isRecording) stopRecording();
-    else startRecording();
+    if (isRecording) {
+      stopRecording();
+    } else {
+      startRecording();
+    }
   };
 
   return (
@@ -70,5 +94,3 @@ const InnerRecorder: React.FC<VoiceRecorderProps> = ({ onSave }) => {
     </button>
   );
 };
-
-export const VoiceRecorder = React.memo(InnerRecorder);
