@@ -2,7 +2,7 @@
 'use client';
 import React from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/router';
+import { usePathname } from 'next/navigation';
 import { TrendingUp, BarChart2, Users, FileText, Calendar, Star } from 'lucide-react';
 import SignOutButton from '@/components/SignOutButton';
 
@@ -57,7 +57,7 @@ const activeAdvisors = [
 ];
 
 export const ChatSidebar: React.FC = () => {
-  const router = useRouter();
+  const pathname = usePathname();
 
   const getInitials = (name: string) => {
     return name
@@ -83,9 +83,9 @@ export const ChatSidebar: React.FC = () => {
         <h3 className="text-sm font-semibold text-gray-700 mb-3">Tools</h3>
         <div className="space-y-2">
           {sidebarItems.map((item) => {
-            const isActive = router.pathname === item.path;
+             const isActive = pathname === item.path;
             return (
-              <Link key={item.path} href={item.path} passHref>
+              <Link key={item.path} href={item.path}>
                 <button
                   className={`
                     w-full flex items-center space-x-3 p-3 rounded-lg transition-colors text-left
