@@ -26,30 +26,6 @@ const sidebarItems: SidebarItem[] = [
     description: 'Analyze your bank data',
     path: '/bank-analysis',
   },
-  {
-    icon: Users,
-    title: 'Team Directory',
-    description: 'Your wealth management team',
-    path: '/team-directory',
-  },
-  {
-    icon: FileText,
-    title: 'Portfolio Reports',
-    description: 'Quarterly performance updates',
-    path: '/portfolio-reports',
-  },
-  {
-    icon: Calendar,
-    title: 'Upcoming Reviews',
-    description: 'Scheduled consultations',
-    path: '/upcoming-reviews',
-  },
-  {
-    icon: Star,
-    title: 'Investment Goals',
-    description: 'Track your financial objectives',
-    path: '/investment-goals',
-  },
 ];
 
 const activeAdvisors = [

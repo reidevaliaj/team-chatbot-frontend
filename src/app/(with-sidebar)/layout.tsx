@@ -8,12 +8,12 @@ export default function WithSidebarLayout({ children }: { children: ReactNode })
   return (
     <div className="flex h-screen bg-gray-100">
       {/* Main content area (left) */}
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+      <div className="flex-1 flex flex-col min-w-0">
         {children}
       </div>
 
       {/* Sidebar (right) */}
-      <div className="w-80 border-l border-gray-300 bg-white">
+      <div className="w-80 border-l border-gray-300 bg-white overflow-hidden">
         <ChatSidebar />
       </div>
     </div>
