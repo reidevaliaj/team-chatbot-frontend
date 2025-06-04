@@ -1,4 +1,5 @@
-// app/(with-sidebar)/bank-analysis/page.tsx
+"use client"
+
 import React from 'react';
 
 export default function BankAnalysisPage() {
