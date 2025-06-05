@@ -1,3 +1,4 @@
+// ChatWindow.tsx
 'use client';
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { useSession } from 'next-auth/react';
@@ -36,6 +37,10 @@ export const ChatWindow = () => {
 
   // Base URL for backend (must be set in .env.local)
   const BACKEND_BASE = process.env.NEXT_PUBLIC_BACKEND_URL!;
+
+  // This ref will point to an empty <div> at the bottom of our scroll area.
+  // Scrolling into view of this <div> pushes us to the bottom.
+  const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
   //
   // 3) Handle sending a voice note blob (useCallback for stability)
@@ -242,6 +247,16 @@ export const ChatWindow = () => {
     [session?.user?.name, BACKEND_BASE]
   );
 
+  //
+  // 7) Whenever `messages` changes, scroll to bottom
+  //
+  useEffect(() => {
+    if (messagesEndRef.current) {
+      // Scroll into view of the dummy div at the bottom
+      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [messages]);
+
   if (status === 'loading') {
     return <div className="p-4">Loading...</div>;
   }
@@ -258,6 +273,9 @@ export const ChatWindow = () => {
         {messages.map((msg) => (
           <MessageBubble key={msg.id + msg.timestamp} message={msg} />
         ))}
+
+        {/* Dummy div at end of list; scrolling into view pushes us to the bottom */}
+        <div ref={messagesEndRef} />
       </div>
 
       <div className="sticky bottom-0">
