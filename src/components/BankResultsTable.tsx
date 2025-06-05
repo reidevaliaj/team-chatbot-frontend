@@ -8,6 +8,7 @@ interface BankRecord {
   total_liabilities: string;
   intangible_assets: string;
   profit_before_tax: string;
+  pdf_name:string;
   created_at: string;
 }
 
@@ -59,6 +60,7 @@ export function BankResultsTable() {
             <th className="px-4 py-2 border-b">Total Liabilities</th>
             <th className="px-4 py-2 border-b">Intangible Assets</th>
             <th className="px-4 py-2 border-b">Profit Before Tax</th>
+            <th className="px-4 py-2 border-b">PDF</th>
             <th className="px-4 py-2 border-b">Created At</th>
           </tr>
         </thead>
@@ -70,6 +72,7 @@ export function BankResultsTable() {
               <td className="px-4 py-2 border-b">{r.total_liabilities}</td>
               <td className="px-4 py-2 border-b">{r.intangible_assets}</td>
               <td className="px-4 py-2 border-b">{r.profit_before_tax}</td>
+              <td className="px-4 py-2 border-b">{r.pdf_name}</td>
               <td className="px-4 py-2 border-b">
                 {new Date(r.created_at).toLocaleString()}
               </td>
