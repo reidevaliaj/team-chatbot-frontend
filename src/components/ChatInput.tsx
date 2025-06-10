@@ -1,18 +1,25 @@
+// components/ChatInput.tsx
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useRef, ChangeEvent, FormEvent } from 'react';
 import { Send, Paperclip } from 'lucide-react';
 import { VoiceRecorder } from './VoiceRecorder';
 
 interface ChatInputProps {
   onSendMessage: (message: string) => void;
   onSendVoice: (file: Blob) => void;
+  onSendFile: (file: File) => void;
 }
 
-export const ChatInput: React.FC<ChatInputProps> = ({ onSendMessage, onSendVoice }) => {
+export const ChatInput: React.FC<ChatInputProps> = ({
+  onSendMessage,
+  onSendVoice,
+  onSendFile,
+}) => {
   const [message, setMessage] = useState('');
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
     if (message.trim()) {
       onSendMessage(message.trim());
@@ -20,13 +27,42 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onSendMessage, onSendVoice
     }
   };
 
+  const handleKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSubmit(e as any);
+    }
+  };
+
+  const handleFileClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      onSendFile(file);
+    }
+    // reset so same file can be re-selected next time
+    e.target.value = '';
+  };
+
   return (
     <div className="bg-white border-t border-gray-200 p-4">
       <form onSubmit={handleSubmit} className="flex items-end space-x-3">
+        {/* Hidden file input */}
+        <input
+          type="file"
+          accept=".pdf,.txt,.doc,.docx"
+          className="hidden"
+          ref={fileInputRef}
+          onChange={handleFileChange}
+        />
+
         {/* File Upload Button */}
         <button
           type="button"
-          onClick={() => console.log('File upload clicked')}
+          onClick={handleFileClick}
           className="p-2 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-full transition-colors"
         >
           <Paperclip size={20} />
@@ -37,12 +73,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onSendMessage, onSendVoice
           <textarea
             value={message}
             onChange={(e) => setMessage(e.target.value)}
-            onKeyPress={(e) => {
-              if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                handleSubmit(e);
-              }
-            }}
+            onKeyPress={handleKeyPress}
             placeholder="Type your message..."
             rows={1}
             className="w-full px-4 py-3 border border-gray-300 rounded-2xl resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-gray-50 transition-all duration-200"
@@ -50,7 +81,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onSendMessage, onSendVoice
           />
         </div>
 
-        {/* Memoized Voice Recorder; onSendVoice is already a stable callback from parent */}
+        {/* Voice Recorder */}
         <VoiceRecorder onSave={onSendVoice} />
 
         {/* Send Button */}

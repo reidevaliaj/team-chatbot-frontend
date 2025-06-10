@@ -13,9 +13,11 @@ interface Message {
   sender: string;
   timestamp: string;
   isOwn: boolean;
-  type: 'text' | 'voice';
-  text?: string;      // only if type === 'text'
-  voiceUrl?: string;  // only if type === 'voice'
+  type: 'text' | 'voice' | 'file';
+  text?: string;
+  voiceUrl?: string;
+  fileUrl?: string;
+  filename?: string;
 }
 
 //
@@ -25,9 +27,10 @@ interface RawMessage {
   id: number;
   sender_name: string;
   created_at: string;
-  type: 'text' | 'voice';
-  content?: string;       // when type === 'text'
-  voice_url?: string;     // when type === 'voice'
+  type: 'text' | 'voice' | 'file';
+  content?: string;
+  media_url?: string;
+  filename?: string;
 }
 
 export const ChatWindow = () => {
@@ -83,6 +86,47 @@ export const ChatWindow = () => {
     [session?.user?.name, BACKEND_BASE]
   );
 
+
+
+  const handleSendFile = useCallback(
+  async (file: File) => {
+    if (!session?.user?.name) return;
+
+    const formData = new FormData();
+    formData.append('sender_name', session.user.name);
+    formData.append('file', file);
+
+    const res = await fetch(`${BACKEND_BASE}/files`, {
+      method: 'POST',
+      body: formData,
+    });
+
+    if (!res.ok) {
+      console.error('Failed to upload file:', await res.text());
+      return;
+    }
+
+    const saved = await res.json();
+
+    // Broadcast via WebSocket
+    if (socket.current?.readyState === WebSocket.OPEN) {
+      socket.current.send(
+        JSON.stringify({
+          type: 'file',
+          id: saved.id,
+          sender_name: saved.sender_name,
+          media_url: saved.media_url,
+          filename: saved.filename,
+          created_at: saved.created_at,
+        })
+      );
+    }
+  },
+  [session?.user?.name, BACKEND_BASE]
+);
+
+
+
   //
   // 4) Load initial messages (both text & voice)
   //
@@ -103,17 +147,26 @@ export const ChatWindow = () => {
           });
           const isOwn = msg.sender_name === session?.user?.name;
 
-          if (msg.type === 'voice' && msg.voice_url) {
+          if (msg.type === 'voice' && msg.media_url) {
             return {
               id: msg.id,
               sender: msg.sender_name,
               timestamp: timeString,
               isOwn,
               type: 'voice',
-              voiceUrl: `${BACKEND_BASE}${msg.voice_url}`,
+              voiceUrl: `${BACKEND_BASE}${msg.media_url}`,  // ← use media_url
+            };
+          } else if (msg.type === 'file' && msg.media_url) {
+            return {
+              id: msg.id,
+              sender: msg.sender_name,
+              timestamp: timeString,
+              isOwn,
+              type: 'file',
+              fileUrl: `${BACKEND_BASE}${msg.media_url}`,  // ← also media_url
+              filename: msg.filename,
             };
           } else {
-            // Fallback: assume msg.type === 'text'
             return {
               id: msg.id,
               sender: msg.sender_name,
@@ -151,51 +204,62 @@ export const ChatWindow = () => {
 
     ws.onopen = () => console.log('WebSocket connected');
 
-    ws.onmessage = (event) => {
-      try {
-        const messageData = JSON.parse(event.data) as {
-          type: 'text' | 'voice';
-          id: number;
-          sender_name: string;
-          content?: string;
-          voice_url?: string;
-          created_at: string;
-        };
-
-        const timeString = new Date(messageData.created_at).toLocaleTimeString(
-          [],
-          { hour: '2-digit', minute: '2-digit' }
-        );
-        const isOwn = messageData.sender_name === session?.user?.name;
-
-        let newMessage: Message;
-
-        if (messageData.type === 'voice' && messageData.voice_url) {
-          newMessage = {
-            id: messageData.id || Date.now(),
-            sender: messageData.sender_name,
-            timestamp: timeString,
-            isOwn,
-            type: 'voice',
-            voiceUrl: `${BACKEND_BASE}${messageData.voice_url}`,
-          };
-        } else {
-          // Default to text case
-          newMessage = {
-            id: messageData.id || Date.now(),
-            sender: messageData.sender_name,
-            timestamp: timeString,
-            isOwn,
-            type: 'text',
-            text: messageData.content ?? '',
-          };
-        }
-
-        setMessages((prev) => [...prev, newMessage]);
-      } catch (err) {
-        console.error('Invalid WebSocket payload:', err);
-      }
+ws.onmessage = (event) => {
+  try {
+    const messageData = JSON.parse(event.data) as {
+      type: 'text' | 'voice' | 'file';
+      id: number;
+      sender_name: string;
+      content?: string;
+      voice_url?: string;
+      media_url?: string;
+      filename?: string;
+      created_at: string;
     };
+
+    const timeString = new Date(messageData.created_at).toLocaleTimeString([], {
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+    const isOwn = messageData.sender_name === session?.user?.name;
+
+    let newMessage: Message;
+
+    if (messageData.type === 'voice' && messageData.voice_url) {
+      newMessage = {
+        id: messageData.id,
+        sender: messageData.sender_name,
+        timestamp: timeString,
+        isOwn,
+        type: 'voice',
+        voiceUrl: `${BACKEND_BASE}${messageData.voice_url}`,
+      };
+    } else if (messageData.type === 'file' && messageData.media_url) {
+      newMessage = {
+        id: messageData.id,
+        sender: messageData.sender_name,
+        timestamp: timeString,
+        isOwn,
+        type: 'file',
+        fileUrl: `${BACKEND_BASE}${messageData.media_url}`,
+        filename: messageData.filename,
+      };
+    } else {
+      newMessage = {
+        id: messageData.id,
+        sender: messageData.sender_name,
+        timestamp: timeString,
+        isOwn,
+        type: 'text',
+        text: messageData.content ?? '',
+      };
+    }
+
+    setMessages((prev) => [...prev, newMessage]);
+  } catch (err) {
+    console.error('Invalid WebSocket payload:', err);
+  }
+};
 
     ws.onerror = (err) => {
       console.error('WebSocket error', err);
@@ -279,10 +343,11 @@ export const ChatWindow = () => {
       </div>
 
       <div className="sticky bottom-0">
-        <ChatInput
-          onSendMessage={handleSendMessage}
-          onSendVoice={handleSendVoiceNote}
-        />
+          <ChatInput
+            onSendMessage={handleSendMessage}
+            onSendVoice={handleSendVoiceNote}
+            onSendFile={handleSendFile}
+          />
       </div>
     </div>
   );
