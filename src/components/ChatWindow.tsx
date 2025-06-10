@@ -77,7 +77,7 @@ export const ChatWindow = () => {
             type: 'voice',
             id: saved.id,
             sender_name: saved.sender_name,
-            voice_url: saved.voice_url,
+            voice_url: saved.media_url,
             created_at: saved.created_at,
           })
         );
