@@ -24,7 +24,7 @@ export default function WithSidebarLayout({ children }: { children: ReactNode })
       <div
         className={`
           fixed inset-y-0 right-0 w-64 bg-white border-l border-gray-300
-          transform transition-transform duration-200 ease-in-out
+          transform transition-transform duration-200 ease-in-out z-30
           ${isOpen ? 'translate-x-0' : 'translate-x-full'}
           md:relative md:translate-x-0 md:flex-shrink-0
         `}
@@ -41,7 +41,7 @@ export default function WithSidebarLayout({ children }: { children: ReactNode })
       {/* Backdrop when open (mobile only) */}
       {isOpen && (
         <div
-          className="fixed inset-0 bg-black opacity-25 md:hidden"
+          className="fixed inset-0 bg-black opacity-25 md:hidden z-20"
           onClick={() => setIsOpen(false)}
         />
       )}
