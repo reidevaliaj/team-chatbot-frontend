@@ -21,7 +21,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
   const getInitials = (name: string) => {
     return name
       .split(' ')
-      .map((word) => word.charAt(0).toUpperCase())
+      .map((w) => w[0].toUpperCase())
       .join('')
       .slice(0, 2);
   };
@@ -40,7 +40,6 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
 
   const togglePlayback = () => {
     if (!audioRef.current) return;
-
     if (isPlaying) {
       audioRef.current.pause();
     } else {
@@ -49,9 +48,11 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
     setIsPlaying(!isPlaying);
   };
 
-  const handleEnded = () => {
-    setIsPlaying(false);
-  };
+  const handleEnded = () => setIsPlaying(false);
+
+  // detect video by filename extension
+  const isVideo =
+    message.filename?.match(/\.(mp4|webm|ogg|mov)$/i) != null;
 
   return (
     <div className={`flex ${message.isOwn ? 'justify-end' : 'justify-start'} mb-4`}>
@@ -90,24 +91,39 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
                 >
                   {isPlaying ? <Pause size={20} /> : <Play size={20} />}
                 </button>
-                <span className="text-xs text-gray-600">{message.timestamp}</span>
+                <span className="text-xs text-gray-500">{message.timestamp}</span>
               </div>
+
             ) : message.type === 'file' && message.fileUrl ? (
-              <div className="flex items-center space-x-2">
-                <a
-                  href={message.fileUrl}
-                  download={message.filename}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center text-sm font-medium text-blue-600 hover:underline"
-                >
-                  <Download size={16} className="mr-1" />
-                  {message.filename}
-                </a>
-                <span className={`text-xs ${message.isOwn ? 'text-blue-100' : 'text-gray-500'}`}>
-                  {message.timestamp}
-                </span>
-              </div>
+              isVideo ? (
+                <div className="flex flex-col space-y-2">
+                  <video
+                    src={message.fileUrl}
+                    controls
+                    className="max-w-full rounded-lg"
+                  />
+                  <span className={`text-xs ${message.isOwn ? 'text-blue-100' : 'text-gray-500'}`}>
+                    {message.timestamp}
+                  </span>
+                </div>
+              ) : (
+                <div className="flex items-center space-x-2">
+                  <a
+                    href={message.fileUrl}
+                    download={message.filename}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center text-sm font-medium text-blue-600 hover:underline"
+                  >
+                    <Download size={16} className="mr-1" />
+                    {message.filename}
+                  </a>
+                  <span className={`text-xs ${message.isOwn ? 'text-blue-100' : 'text-gray-500'}`}>
+                    {message.timestamp}
+                  </span>
+                </div>
+              )
+
             ) : (
               <>
                 <p className="text-sm leading-relaxed">{message.text}</p>

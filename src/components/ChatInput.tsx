@@ -52,12 +52,12 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       <form onSubmit={handleSubmit} className="flex items-end space-x-3">
         {/* Hidden file input */}
         <input
-          type="file"
-          accept=".pdf,.txt,.doc,.docx"
-          className="hidden"
-          ref={fileInputRef}
-          onChange={handleFileChange}
-        />
+        type="file"
+        accept=".pdf,.txt,.doc,.docx,video/mp4,video/webm,video/ogg,video/quicktime"
+        className="hidden"
+        ref={fileInputRef}
+        onChange={handleFileChange}
+      />
 
         {/* File Upload Button */}
         <button
