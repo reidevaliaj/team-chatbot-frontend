@@ -1,13 +1,9 @@
-// ChatWindow.tsx
 'use client';
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { useSession } from 'next-auth/react';
 import { MessageBubble } from './MessageBubble';
 import { ChatInput } from './ChatInput';
 
-//
-// 1) Extend Message interface to include both text and voice
-//
 interface Message {
   id: number;
   sender: string;
@@ -20,9 +16,6 @@ interface Message {
   filename?: string;
 }
 
-//
-// 2) RawMessage must match what GET /messages returns
-//
 interface RawMessage {
   id: number;
   sender_name: string;
@@ -38,16 +31,21 @@ export const ChatWindow = () => {
   const [messages, setMessages] = useState<Message[]>([]);
   const socket = useRef<WebSocket | null>(null);
 
-  // Base URL for backend (must be set in .env.local)
   const BACKEND_BASE = process.env.NEXT_PUBLIC_BACKEND_URL!;
+  const WS_URL =
+    process.env.NEXT_PUBLIC_WS_URL ??
+    (process.env.NODE_ENV === 'production'
+      ? 'wss://team-chatbot-backend-django.fly.dev/ws/chat'
+      : 'ws://localhost:8000/ws/chat');
 
-  // This ref will point to an empty <div> at the bottom of our scroll area.
-  // Scrolling into view of this <div> pushes us to the bottom.
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
-  //
-  // 3) Handle sending a voice note blob (useCallback for stability)
-  //
+  const absolutize = (maybePath?: string) =>
+    maybePath && maybePath.startsWith('/')
+      ? `${BACKEND_BASE}${maybePath}`
+      : maybePath ?? '';
+
+  // ---------- Voice note ----------
   const handleSendVoiceNote = useCallback(
     async (audioBlob: Blob) => {
       if (!session?.user?.name) return;
@@ -56,8 +54,7 @@ export const ChatWindow = () => {
       formData.append('sender_name', session.user.name);
       formData.append('voice_file', audioBlob, `voice_${Date.now()}.webm`);
 
-      // POST to /voice_notes
-      const res = await fetch(`${BACKEND_BASE}/voice_notes`, {
+      const res = await fetch(`${BACKEND_BASE}/voice_notes/`, {
         method: 'POST',
         body: formData,
       });
@@ -67,17 +64,15 @@ export const ChatWindow = () => {
         return;
       }
 
-      // Expecting `{ id, sender_name, voice_url, created_at, type: 'voice' }`
-      const saved = await res.json();
+      const saved = await res.json(); // {id, sender_name, media_url, created_at, type:'voice'}
 
-      // Broadcast over WebSocket
       if (socket.current?.readyState === WebSocket.OPEN) {
         socket.current.send(
           JSON.stringify({
             type: 'voice',
             id: saved.id,
             sender_name: saved.sender_name,
-            voice_url: saved.media_url,
+            media_url: saved.media_url,
             created_at: saved.created_at,
           })
         );
@@ -86,54 +81,48 @@ export const ChatWindow = () => {
     [session?.user?.name, BACKEND_BASE]
   );
 
-
-
+  // ---------- File ----------
   const handleSendFile = useCallback(
-  async (file: File) => {
-    if (!session?.user?.name) return;
+    async (file: File) => {
+      if (!session?.user?.name) return;
 
-    const formData = new FormData();
-    formData.append('sender_name', session.user.name);
-    formData.append('file', file);
+      const formData = new FormData();
+      formData.append('sender_name', session.user.name);
+      formData.append('file', file);
 
-    const res = await fetch(`${BACKEND_BASE}/files`, {
-      method: 'POST',
-      body: formData,
-    });
+      const res = await fetch(`${BACKEND_BASE}/files/`, {
+        method: 'POST',
+        body: formData,
+      });
 
-    if (!res.ok) {
-      console.error('Failed to upload file:', await res.text());
-      return;
-    }
+      if (!res.ok) {
+        console.error('Failed to upload file:', await res.text());
+        return;
+      }
 
-    const saved = await res.json();
+      const saved = await res.json(); // {id, sender_name, media_url, filename, created_at, type:'file'|'voice'}
 
-    // Broadcast via WebSocket
-    if (socket.current?.readyState === WebSocket.OPEN) {
-      socket.current.send(
-        JSON.stringify({
-          type: 'file',
-          id: saved.id,
-          sender_name: saved.sender_name,
-          media_url: saved.media_url,
-          filename: saved.filename,
-          created_at: saved.created_at,
-        })
-      );
-    }
-  },
-  [session?.user?.name, BACKEND_BASE]
-);
+      if (socket.current?.readyState === WebSocket.OPEN) {
+        socket.current.send(
+          JSON.stringify({
+            type: saved.type, // 'file' or 'voice'
+            id: saved.id,
+            sender_name: saved.sender_name,
+            media_url: saved.media_url,
+            filename: saved.filename,
+            created_at: saved.created_at,
+          })
+        );
+      }
+    },
+    [session?.user?.name, BACKEND_BASE]
+  );
 
-
-
-  //
-  // 4) Load initial messages (both text & voice)
-  //
+  // ---------- Initial fetch ----------
   useEffect(() => {
     const fetchMessages = async () => {
       try {
-        const res = await fetch(`${BACKEND_BASE}/messages`);
+        const res = await fetch(`${BACKEND_BASE}/messages/`);
         if (!res.ok) {
           console.error('Failed to fetch messages:', res.statusText);
           return;
@@ -154,7 +143,7 @@ export const ChatWindow = () => {
               timestamp: timeString,
               isOwn,
               type: 'voice',
-              voiceUrl: `${BACKEND_BASE}${msg.media_url}`,  // ← use media_url
+              voiceUrl: absolutize(msg.media_url),
             };
           } else if (msg.type === 'file' && msg.media_url) {
             return {
@@ -163,7 +152,7 @@ export const ChatWindow = () => {
               timestamp: timeString,
               isOwn,
               type: 'file',
-              fileUrl: `${BACKEND_BASE}${msg.media_url}`,  // ← also media_url
+              fileUrl: absolutize(msg.media_url),
               filename: msg.filename,
             };
           } else {
@@ -184,114 +173,95 @@ export const ChatWindow = () => {
       }
     };
 
-    if (session) {
-      fetchMessages();
-    }
+    if (session) fetchMessages();
   }, [session, BACKEND_BASE]);
 
-  //
-  // 5) WebSocket connection & onmessage
-  //
+  // ---------- WebSocket ----------
   useEffect(() => {
     if (status !== 'authenticated') return;
 
-    const ws = new WebSocket(
-      process.env.NODE_ENV === 'production'
-        ? 'wss://team-chatbot-backend.fly.dev/ws/chat'
-        : 'ws://localhost:8000/ws/chat'
-    );
+    const ws = new WebSocket(WS_URL);
     socket.current = ws;
 
     ws.onopen = () => console.log('WebSocket connected');
 
-ws.onmessage = (event) => {
-  try {
-    const messageData = JSON.parse(event.data) as {
-      type: 'text' | 'voice' | 'file';
-      id: number;
-      sender_name: string;
-      content?: string;
-      voice_url?: string;
-      media_url?: string;
-      filename?: string;
-      created_at: string;
+    ws.onmessage = (event) => {
+      try {
+        const messageData = JSON.parse(event.data) as {
+          type: 'text' | 'voice' | 'file';
+          id: number;
+          sender_name: string;
+          content?: string;
+          media_url?: string;
+          filename?: string;
+          created_at: string;
+        };
+
+        const timeString = new Date(messageData.created_at).toLocaleTimeString([], {
+          hour: '2-digit',
+          minute: '2-digit',
+        });
+        const isOwn = messageData.sender_name === session?.user?.name;
+
+        let newMessage: Message;
+        if (messageData.type === 'voice' && messageData.media_url) {
+          newMessage = {
+            id: messageData.id,
+            sender: messageData.sender_name,
+            timestamp: timeString,
+            isOwn,
+            type: 'voice',
+            voiceUrl: absolutize(messageData.media_url),
+          };
+        } else if (messageData.type === 'file' && messageData.media_url) {
+          newMessage = {
+            id: messageData.id,
+            sender: messageData.sender_name,
+            timestamp: timeString,
+            isOwn,
+            type: 'file',
+            fileUrl: absolutize(messageData.media_url),
+            filename: messageData.filename,
+          };
+        } else {
+          newMessage = {
+            id: messageData.id,
+            sender: messageData.sender_name,
+            timestamp: timeString,
+            isOwn,
+            type: 'text',
+            text: messageData.content ?? '',
+          };
+        }
+
+        setMessages((prev) => [...prev, newMessage]);
+      } catch (err) {
+        console.error('Invalid WebSocket payload:', err);
+      }
     };
 
-    const timeString = new Date(messageData.created_at).toLocaleTimeString([], {
-      hour: '2-digit',
-      minute: '2-digit',
-    });
-    const isOwn = messageData.sender_name === session?.user?.name;
+    ws.onerror = (err) => console.error('WebSocket error', err);
+    ws.onclose = () => console.log('WebSocket disconnected');
 
-    let newMessage: Message;
+    return () => ws.close();
+  }, [status, session?.user?.name, WS_URL, BACKEND_BASE]);
 
-    if (messageData.type === 'voice' && messageData.voice_url) {
-      newMessage = {
-        id: messageData.id,
-        sender: messageData.sender_name,
-        timestamp: timeString,
-        isOwn,
-        type: 'voice',
-        voiceUrl: `${BACKEND_BASE}${messageData.voice_url}`,
-      };
-    } else if (messageData.type === 'file' && messageData.media_url) {
-      newMessage = {
-        id: messageData.id,
-        sender: messageData.sender_name,
-        timestamp: timeString,
-        isOwn,
-        type: 'file',
-        fileUrl: `${BACKEND_BASE}${messageData.media_url}`,
-        filename: messageData.filename,
-      };
-    } else {
-      newMessage = {
-        id: messageData.id,
-        sender: messageData.sender_name,
-        timestamp: timeString,
-        isOwn,
-        type: 'text',
-        text: messageData.content ?? '',
-      };
-    }
-
-    setMessages((prev) => [...prev, newMessage]);
-  } catch (err) {
-    console.error('Invalid WebSocket payload:', err);
-  }
-};
-
-    ws.onerror = (err) => {
-      console.error('WebSocket error', err);
-    };
-
-    ws.onclose = () => {
-      console.log('WebSocket disconnected');
-    };
-
-    return () => {
-      ws.close();
-    };
-  }, [status, session?.user?.name, BACKEND_BASE]);
-
-  //
-  // 6) Handle sending a text message (useCallback for stability)
-  //
+  // ---------- Text ----------
   const handleSendMessage = useCallback(
     async (text: string) => {
       if (!session?.user?.name) return;
 
-      const newMessagePayload = {
+      const payload = {
         sender_name: session.user.name,
         content: text,
         type: 'text',
       };
 
       try {
-        const res = await fetch(`${BACKEND_BASE}/messages`, {
+        const res = await fetch(`${BACKEND_BASE}/messages/`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(newMessagePayload),
+          body: JSON.stringify(payload),
         });
         if (!res.ok) {
           console.error('Failed to send text message:', await res.text());
@@ -299,8 +269,7 @@ ws.onmessage = (event) => {
         }
 
         const saved = await res.json();
-        // Assume backend returns { id, sender_name, content, created_at, type: 'text' }
-
+        // saved already has everything we need
         if (socket.current?.readyState === WebSocket.OPEN) {
           socket.current.send(JSON.stringify(saved));
         }
@@ -311,19 +280,11 @@ ws.onmessage = (event) => {
     [session?.user?.name, BACKEND_BASE]
   );
 
-  //
-  // 7) Whenever `messages` changes, scroll to bottom
-  //
   useEffect(() => {
-    if (messagesEndRef.current) {
-      // Scroll into view of the dummy div at the bottom
-      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
-    }
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  if (status === 'loading') {
-    return <div className="p-4">Loading...</div>;
-  }
+  if (status === 'loading') return <div className="p-4">Loading...</div>;
 
   return (
     <div className="flex flex-col h-full bg-gradient-to-b from-gray-50 to-white">
@@ -338,16 +299,15 @@ ws.onmessage = (event) => {
           <MessageBubble key={msg.id + msg.timestamp} message={msg} />
         ))}
 
-        {/* Dummy div at end of list; scrolling into view pushes us to the bottom */}
         <div ref={messagesEndRef} />
       </div>
 
       <div className="sticky bottom-0">
-          <ChatInput
-            onSendMessage={handleSendMessage}
-            onSendVoice={handleSendVoiceNote}
-            onSendFile={handleSendFile}
-          />
+        <ChatInput
+          onSendMessage={handleSendMessage}
+          onSendVoice={handleSendVoiceNote}
+          onSendFile={handleSendFile}
+        />
       </div>
     </div>
   );
