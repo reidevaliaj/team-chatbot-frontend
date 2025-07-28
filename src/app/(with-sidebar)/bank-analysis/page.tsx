@@ -11,7 +11,7 @@ export default function BankAnalysisPage() {
   const [error, setError] = useState<string | null>(null);
 
   // If you set NEXT_PUBLIC_BACKEND_URL in .env.local, use it in production
-  const BACKEND_BASE = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000';
+  const BACKEND_BASE = (process.env.NEXT_PUBLIC_BANK_API_URL as string | undefined) || `${process.env.NEXT_PUBLIC_BACKEND_URL}/api`;   // fallback
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setResult(null);
