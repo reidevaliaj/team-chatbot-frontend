@@ -14,6 +14,8 @@ export default function BankAnalysisPage() {
   const BACKEND_BASE = process.env.NEXT_PUBLIC_BACKEND_URL ??
   "https://team-chatbot-backend-django.fly.dev";
 
+    console.log('BACKEND_BASE at runtime →', BACKEND_BASE);
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setResult(null);
     setError(null);
