@@ -35,7 +35,7 @@ export default function BankAnalysisPage() {
     formData.append('pdf', selectedFile);
 
     try {
-      const resp = await fetch(`${BACKEND_BASE}api/bank-analysis/upload/`, {
+      const resp = await fetch(`${BACKEND_BASE}/api/bank-analysis/upload/`, {
         method: 'POST',
         body: formData,
       });
