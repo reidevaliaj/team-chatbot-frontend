@@ -23,7 +23,7 @@ export function BankResultsTable() {
   useEffect(() => {
     async function loadRecords() {
       try {
-        const res = await fetch(`${BACKEND_BASE}/bank-analysis/results`);
+        const res = await fetch(`${BACKEND_BASE}api/bank-analysis/results`);
         if (!res.ok) {
           throw new Error(`Failed to fetch: ${res.status}`);
         }
