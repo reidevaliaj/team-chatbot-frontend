@@ -1,8 +1,7 @@
-// app/(with-sidebar)/bank-analysis/page.tsx
 'use client';
 
 import React, { useState, FormEvent } from 'react';
-import { BankResultsTable } from '@/components/BankResultsTable';
+import { BankResultsTable, refreshBankTable } from '@/components/BankResultsTable';
 
 export default function BankAnalysisPage() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -10,56 +9,52 @@ export default function BankAnalysisPage() {
   const [result, setResult] = useState<Record<string, string> | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  // If you set NEXT_PUBLIC_BACKEND_URL in .env.local, use it in production
-  const BACKEND_BASE = process.env.NEXT_PUBLIC_BACKEND_URL ??
-  "https://team-chatbot-backend-django.fly.dev";
-
-    console.log('BACKEND_BASE at runtime →', BACKEND_BASE);
+  const BACKEND_BASE =
+    process.env.NEXT_PUBLIC_BACKEND_URL ??
+    'https://team-chatbot-backend-django.fly.dev';
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setResult(null);
     setError(null);
-    if (e.target.files && e.target.files.length > 0) {
-      setSelectedFile(e.target.files[0]);
-    } else {
-      setSelectedFile(null);
-    }
+    setSelectedFile(e.target.files?.[0] ?? null);
   };
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    setError(null);
-    if (!selectedFile) {
-      setError('Please select a PDF first.');
-      return;
-    }
+    if (!selectedFile) return setError('Please select a PDF first.');
+
     setLoading(true);
+    setError(null);
+
     const formData = new FormData();
     formData.append('pdf', selectedFile);
 
-    const url = `${BACKEND_BASE}/api/bank-analysis/upload/`;
-    console.log('⬆️  Uploading to →', url);  
-
     try {
-      const resp = await fetch(url,  {
+      const resp = await fetch(`${BACKEND_BASE}/api/bank-analysis/upload/`, {
         method: 'POST',
         body: formData,
       });
+
       if (!resp.ok) {
-        const text = await resp.text();
-        throw new Error(`Server Error: ${text}`);
+        throw new Error(await resp.text());
       }
+
       const body = await resp.json();
-      // body has a shape like { id, total_assets, total_liabilities, intangible_assets, profit_before_tax, created_at }
-      // We only care about the extracted data itself for display here:
       setResult({
         'Total Assets': body.total_assets,
         'Total Liabilities': body.total_liabilities,
         'Intangible Assets': body.intangible_assets,
         'Profit before Tax': body.profit_before_tax,
       });
+
+      /* ⭐  Refresh the table instantly */
+      refreshBankTable();
+
+      /* (Optional) clear the file input */
+      setSelectedFile(null);
+      (e.target as HTMLFormElement).reset();
     } catch (err: any) {
-      setError(err.message || 'Unknown error');
+      setError(err.message ?? 'Unknown error');
     } finally {
       setLoading(false);
     }
@@ -69,9 +64,7 @@ export default function BankAnalysisPage() {
     <div className="p-6 overflow-y-auto flex flex-col h-full">
       <h1 className="text-2xl font-bold mb-4">Bank Analysis</h1>
 
-      {/* ───────────────────────────────────────────────────────────────────────── */}
-      {/* 1) PDF Upload Form */}
-      {/* ───────────────────────────────────────────────────────────────────────── */}
+      {/* ── Upload form ─────────────────────────────────────────── */}
       <form onSubmit={handleSubmit} className="mb-6">
         <input
           type="file"
@@ -88,19 +81,20 @@ export default function BankAnalysisPage() {
         </button>
       </form>
 
+      {/* ── Status / preview ────────────────────────────────────── */}
       {error && (
-        <div className="mb-4 text-red-600">
+        <p className="mb-4 text-red-600">
           <strong>Error:</strong> {error}
-        </div>
+        </p>
       )}
 
-      {loading && (
-        <div className="mb-4 text-gray-600">Please wait, processing PDF…</div>
-      )}
+      {loading && <p className="mb-4 text-gray-600">Processing PDF…</p>}
 
       {result && (
-        <div className="bg-white border border-gray-200 rounded-lg p-4 mb-6">
-          <h2 className="text-lg font-semibold mb-2">Extracted Financial Data</h2>
+        <div className="bg-white border rounded-lg p-4 mb-6">
+          <h2 className="text-lg font-semibold mb-2">
+            Extracted Financial Data
+          </h2>
           <pre className="bg-gray-50 p-3 rounded overflow-x-auto">
             {JSON.stringify(result, null, 2)}
           </pre>
@@ -113,10 +107,7 @@ export default function BankAnalysisPage() {
         </p>
       )}
 
-
-      {/* ───────────────────────────────────────────────────────────────────────── */}
-      {/* 2) Render the table of all saved BankRecords */}
-      {/* ───────────────────────────────────────────────────────────────────────── */}
+      {/* ── Saved records table ─────────────────────────────────── */}
       <BankResultsTable />
     </div>
   );
