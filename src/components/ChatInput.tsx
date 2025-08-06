@@ -53,7 +53,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         {/* Hidden file input */}
         <input
         type="file"
-        accept=".pdf,.txt,.doc,.docx,video/mp4,video/webm,video/ogg,video/quicktime"
+        accept=".pdf,.txt,.doc,.docx,video/mp4,video/webm,video/ogg,video/quicktime,image/png,image/jpeg"
         className="hidden"
         ref={fileInputRef}
         onChange={handleFileChange}
