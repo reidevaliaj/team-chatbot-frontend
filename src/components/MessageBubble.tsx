@@ -135,7 +135,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
         </div>
 
         {message.isOwn && (
-          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-600 to-green-600 flex items-center justify-center text-white text-xs font-semibold ml-2 mb-1">
+          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-600 p-[12px] to-green-600 flex items-center justify-center text-white text-xs font-semibold ml-2 mb-1">
             {getInitials(message.sender)}
           </div>
         )}
