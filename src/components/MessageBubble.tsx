@@ -55,7 +55,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
         className={`flex ${message.isOwn ? 'flex-row-reverse' : 'flex-row'} items-end max-w-xs lg:max-w-md`}
       >
         {!message.isOwn && (
-          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-600 to-green-600 flex items-center justify-center text-white text-xs font-semibold mr-2 mb-1">
+          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-600 to-green-600 p-[12px] flex items-center justify-center text-white text-xs font-semibold mr-2 mb-1">
             {getInitials(message.sender)}
           </div>
         )}
