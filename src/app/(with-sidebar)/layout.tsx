@@ -23,7 +23,7 @@ export default function WithSidebarLayout({ children }: { children: ReactNode })
       {/* Sidebar drawer */}
       <div
         className={`
-          fixed inset-y-0 right-0 w-64 bg-white border-l border-gray-300
+          fixed inset-y-0 right-0 w-64 bg-white border-l border-r border-gray-300
           transform transition-transform duration-200 ease-in-out z-30
           ${isOpen ? 'translate-x-0' : 'translate-x-full'}
           md:relative md:translate-x-0 md:flex-shrink-0
