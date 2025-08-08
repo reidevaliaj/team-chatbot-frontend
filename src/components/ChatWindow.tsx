@@ -148,24 +148,26 @@ export const ChatWindow = () => {
     const ws = new WebSocket(WS_URL);
     socket.current = ws;
 
-    ws.onmessage = (evt) => {
+    ws.onmessage = evt => {
       try {
         const raw: RawMessage = JSON.parse(evt.data);
 
         setMessages(prev => {
-          /* 1) drop any existing typing stubs */
-          const withoutTyping = prev.filter(m => m.type !== 'typing');
+          // ⬇️ keep existing dots unless the *System* just answered
+          const cleaned = prev.filter(
+            m => !(m.type === 'typing' && m.sender === raw.sender_name)
+          );
 
-          /* 2) if incoming is typing → just append stub */
+          // typing event → just append and keep waiting
           if (raw.type === 'typing') {
-            return [...withoutTyping, mapRaw(raw)];
+            return [...cleaned, mapRaw(raw)];
           }
 
-          /* 3) real message → append after removing stub */
-          return [...withoutTyping, mapRaw(raw)];
+          // real reply → show it *after* removing the dots
+          return [...cleaned, mapRaw(raw)];
         });
-      } catch (e) {
-        console.error('Bad WS payload:', e);
+      } catch (err) {
+        console.error('Bad WS payload:', err);
       }
     };
 
