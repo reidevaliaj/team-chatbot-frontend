@@ -1,68 +1,69 @@
+'use client';
 import React, { useRef, useState, useEffect } from 'react';
 import { Play, Pause, Download } from 'lucide-react';
 
+/* ---------- Types ---------- */
+type MsgKind = 'text' | 'voice' | 'file' | 'typing';
+
 interface Message {
-  id: number;
-  sender: string;
-  timestamp: string;
-  isOwn: boolean;
-  type: 'text' | 'voice' | 'file';
-  text?: string;
-  voiceUrl?: string;
-  fileUrl?: string;
-  filename?: string;
+  id:        number | string;
+  sender:    string;
+  timestamp: string;          // empty for typing stub
+  isOwn:     boolean;
+  type:      MsgKind;
+
+  text?:      string;
+  voiceUrl?:  string;
+  fileUrl?:   string;
+  filename?:  string;
 }
 
-interface MessageBubbleProps {
-  message: Message;
-}
+interface Props { message: Message }
 
-export const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
-  const getInitials = (name: string) =>
-    name
-      .split(' ')
-      .map((w) => w[0].toUpperCase())
-      .join('')
-      .slice(0, 2);
+/* ---------- Component ---------- */
+export const MessageBubble: React.FC<Props> = ({ message }) => {
+  /* helpers */
+  const initials = (name: string) =>
+    name.split(' ').map(w => w[0].toUpperCase()).join('').slice(0, 2);
 
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-  const [isPlaying, setIsPlaying] = useState(false);
+  const audioRef   = useRef<HTMLAudioElement>(null);
+  const [playing, setPlaying] = useState(false);
 
-  useEffect(() => {
-    return () => {
-      if (audioRef.current) {
-        audioRef.current.pause();
-        audioRef.current.currentTime = 0;
-      }
-    };
+  useEffect(() => () => {
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.currentTime = 0;
+    }
   }, []);
 
-  const togglePlayback = () => {
+  const togglePlay = () => {
     if (!audioRef.current) return;
-    isPlaying ? audioRef.current.pause() : audioRef.current.play();
-    setIsPlaying(!isPlaying);
+    playing ? audioRef.current.pause() : audioRef.current.play();
+    setPlaying(!playing);
   };
 
-  const handleEnded = () => setIsPlaying(false);
-
-  /* ---------- helpers ---------- */
   const isVideo = !!message.filename?.match(/\.(mp4|webm|ogg|mov)$/i);
-  const isImage = !!message.filename?.match(/\.(png|jpe?g|gif|webp)$/i); // NEW
+  const isImage = !!message.filename?.match(/\.(png|jpe?g|gif|webp)$/i);
 
+  /* ---------- Render ---------- */
   return (
     <div className={`flex ${message.isOwn ? 'justify-end' : 'justify-start'} mb-4`}>
       <div
         className={`flex ${message.isOwn ? 'flex-row-reverse' : 'flex-row'} items-end max-w-xs lg:max-w-md`}
       >
+        {/* avatar (left) */}
         {!message.isOwn && (
-          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-600 to-green-600 p-[12px] flex items-center justify-center text-white text-xs font-semibold mr-2 mb-1">
-            {getInitials(message.sender)}
+          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-600 to-green-600 flex items-center justify-center text-white text-xs font-semibold mr-2 mb-1">
+            {initials(message.sender)}
           </div>
         )}
 
+        {/* bubble */}
         <div className="flex flex-col">
           {!message.isOwn && (
-            <span className="text-xs text-gray-600 mb-1 ml-1 font-medium">{message.sender}</span>
+            <span className="text-xs text-gray-600 mb-1 ml-1 font-medium">
+              {message.sender}
+            </span>
           )}
 
           <div
@@ -72,31 +73,52 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
                 : 'bg-white text-gray-900 border border-gray-200 rounded-bl-md shadow-sm'
             }`}
           >
-            {/* --- voice ----------------------------------------------------- */}
-            {message.type === 'voice' && message.voiceUrl ? (
+            {/* -------- typing stub -------- */}
+            {message.type === 'typing' ? (
+              <div className="flex space-x-1">
+                {[0, 1, 2].map(i => (
+                  <span
+                    key={i}
+                    className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"
+                    style={{ animationDelay: `${i * 0.15}s` }}
+                  />
+                ))}
+              </div>
+
+            /* -------- voice -------- */
+            ) : message.type === 'voice' && message.voiceUrl ? (
               <div className="flex items-center space-x-2">
-                <audio ref={audioRef} src={message.voiceUrl} onEnded={handleEnded} className="hidden" />
+                <audio
+                  ref={audioRef}
+                  src={message.voiceUrl}
+                  onEnded={() => setPlaying(false)}
+                  className="hidden"
+                />
                 <button
-                  onClick={togglePlayback}
+                  onClick={togglePlay}
                   className="p-2 rounded-full bg-gray-100 hover:bg-gray-200 transition-colors"
                 >
-                  {isPlaying ? <Pause size={20} /> : <Play size={20} />}
+                  {playing ? <Pause size={20} /> : <Play size={20} />}
                 </button>
                 <span className="text-xs text-gray-500">{message.timestamp}</span>
               </div>
 
-            /* --- files (image ▸ video ▸ other) ---------------------------- */
+            /* -------- files -------- */
             ) : message.type === 'file' && message.fileUrl ? (
-              isImage ? (                                                              /* NEW */
-                /* image preview */
+              isImage ? (
+                /* image */
                 <div className="flex flex-col space-y-2">
-                  <img src={message.fileUrl} alt={message.filename ?? 'uploaded'} className="max-w-full rounded-lg" />
+                  <img
+                    src={message.fileUrl}
+                    alt={message.filename ?? 'uploaded'}
+                    className="max-w-full rounded-lg"
+                  />
                   <span className={`text-xs ${message.isOwn ? 'text-blue-100' : 'text-gray-500'}`}>
                     {message.timestamp}
                   </span>
                 </div>
               ) : isVideo ? (
-                /* video preview (unchanged) */
+                /* video */
                 <div className="flex flex-col space-y-2">
                   <video src={message.fileUrl} controls className="max-w-full rounded-lg" />
                   <span className={`text-xs ${message.isOwn ? 'text-blue-100' : 'text-gray-500'}`}>
@@ -104,7 +126,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
                   </span>
                 </div>
               ) : (
-                /* downloadable doc (unchanged) */
+                /* other downloadable doc */
                 <div className="flex items-center space-x-2">
                   <a
                     href={message.fileUrl}
@@ -122,7 +144,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
                 </div>
               )
 
-            /* --- plain text ----------------------------------------------- */
+            /* -------- plain text -------- */
             ) : (
               <>
                 <p className="text-sm leading-relaxed">{message.text}</p>
@@ -134,9 +156,10 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
           </div>
         </div>
 
+        {/* avatar (right) */}
         {message.isOwn && (
-          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-600 p-[12px] to-green-600 flex items-center justify-center text-white text-xs font-semibold ml-2 mb-1">
-            {getInitials(message.sender)}
+          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-600 to-green-600 flex items-center justify-center text-white text-xs font-semibold ml-2 mb-1">
+            {initials(message.sender)}
           </div>
         )}
       </div>

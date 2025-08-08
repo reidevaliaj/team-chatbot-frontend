@@ -4,23 +4,34 @@ import { useSession } from 'next-auth/react';
 import { MessageBubble } from './MessageBubble';
 import { ChatInput } from './ChatInput';
 
+
+
+
+
 /* ───────── Types ───────── */
+
+type MsgKind = 'text' | 'voice' | 'file' | 'typing'           
+type MsgID   = string | number 
+
+
 interface Message {
-  id: number;
+  id: MsgID;                                                  
   sender: string;
   timestamp: string;
   isOwn: boolean;
-  type: 'text' | 'voice' | 'file';
+  type: MsgKind;                                              
   text?: string;
   voiceUrl?: string;
   fileUrl?: string;
   filename?: string;
 }
+
+
 interface RawMessage {
-  id: number;
+  id: MsgID;                                                   
   sender_name: string;
-  created_at: string;
-  type: 'text' | 'voice' | 'file';
+  created_at?: string;                                         
+  type: MsgKind;                                               
   content?: string;
   media_url?: string;
   filename?: string;
