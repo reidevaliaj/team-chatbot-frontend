@@ -76,6 +76,7 @@ export const MessageBubble: React.FC<Props> = ({ message }) => {
             {/* -------- typing stub -------- */}
             {message.type === 'typing' ? (
               <div className="flex space-x-1">
+                <span> The system is processing the information</span>
                 {[0, 1, 2].map(i => (
                   <span
                     key={i}
