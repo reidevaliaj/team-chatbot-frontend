@@ -16,9 +16,9 @@ interface SidebarItem {
 const sidebarItems: SidebarItem[] = [
   {
     icon: TrendingUp,
-    title: 'Chat',
+    title: 'Input-Data',
     description: 'AI chat',
-    path: '/chat',
+    path: '/input-data',
   },
   {
     icon: BarChart2,
