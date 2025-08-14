@@ -3,7 +3,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { TrendingUp, BarChart2 } from 'lucide-react';
+import { TrendingUp, MessageSquare, BarChart2 } from 'lucide-react';
 import SignOutButton from '@/components/SignOutButton';
 
 interface SidebarItem {
@@ -19,6 +19,12 @@ const sidebarItems: SidebarItem[] = [
     title: 'Input-Data',
     description: 'Input Data to Vector Database',
     path: '/input-data',
+  },
+  {
+    icon: MessageSquare,
+    title: 'Chat Now',
+    description: 'Real-time chat',
+    path: '/chat-now',
   },
   {
     icon: BarChart2,

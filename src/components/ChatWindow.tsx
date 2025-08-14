@@ -9,101 +9,118 @@ import { useSession } from 'next-auth/react';
 import { ChatInput } from './ChatInput';
 import { MessageBubble } from './MessageBubble';
 
-/* ───────── Types ───────── */
 type MsgKind = 'text' | 'voice' | 'file' | 'typing';
-type MsgID   = string | number;
+type MsgID = string | number;
 
 interface Message {
-  id:        MsgID;
-  sender:    string;
+  id: MsgID;
+  sender: string;
   timestamp: string;
-  isOwn:     boolean;
-  type:      MsgKind;
-  text?:     string;
+  isOwn: boolean;
+  type: MsgKind;
+  text?: string;
   voiceUrl?: string;
-  fileUrl?:  string;
+  fileUrl?: string;
   filename?: string;
 }
 
 interface RawMessage {
-  id:           MsgID;
-  sender_name:  string;
-  created_at?:  string;         // absent on typing stub
-  type:         MsgKind;
-  content?:     string;
-  media_url?:   string;
-  filename?:    string;
+  id: MsgID;
+  sender_name: string;
+  created_at?: string;
+  type: MsgKind;
+  content?: string;
+  media_url?: string;
+  filename?: string;
 }
 
-/* ───────── Component ───────── */
-export const ChatWindow = () => {
+interface ChatWindowProps {
+  backendBase?: string;
+  wsUrl?: string;
+}
+
+export const ChatWindow: React.FC<ChatWindowProps> = ({
+  backendBase,
+  wsUrl,
+}) => {
   const { data: session, status } = useSession();
 
-  /* message list */
   const [messages, setMessages] = useState<Message[]>([]);
-
-  /* pagination */
-  const [offset,   setOffset]   = useState(0);
-  const [hasMore,  setHasMore]  = useState(true);
+  const [offset, setOffset] = useState(0);
+  const [hasMore, setHasMore] = useState(true);
   const LIMIT = 20;
 
-  const socket          = useRef<WebSocket | null>(null);
-  const scrollBoxRef    = useRef<HTMLDivElement>(null);
-  const messagesEndRef  = useRef<HTMLDivElement>(null);
+  const socket = useRef<WebSocket | null>(null);
+  const scrollBoxRef = useRef<HTMLDivElement>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  const BACKEND_BASE = process.env.NEXT_PUBLIC_BACKEND_URL!;
-  const WS_URL = process.env.NEXT_PUBLIC_WS_URL ??
-    (process.env.NODE_ENV === 'production'
-      ? 'wss://team-chatbot-backend-django.fly.dev/ws/input-data'
-      : 'ws://localhost:8000/ws/input-data');
+  const BACKEND_BASE =
+    backendBase ?? process.env.NEXT_PUBLIC_BACKEND_URL!;
+
+  const WS_URL =
+    wsUrl ??
+    (process.env.NEXT_PUBLIC_WS_URL ??
+      (process.env.NODE_ENV === 'production'
+        ? 'wss://team-chatbot-backend-django.fly.dev/ws/input-data'
+        : 'ws://localhost:8000/ws/input-data'));
 
   const absolutize = (maybe: string | undefined) =>
     maybe && maybe.startsWith('/') ? `${BACKEND_BASE}${maybe}` : maybe ?? '';
 
-  /* ───────── Raw → UI ───────── */
   const mapRaw = useCallback(
     (msg: RawMessage): Message => {
-      /* typing stub: no timestamp, never “own” */
       if (msg.type === 'typing') {
         return {
-          id:        msg.id,
-          sender:    msg.sender_name,
+          id: msg.id,
+          sender: msg.sender_name,
           timestamp: '',
-          isOwn:     false,
-          type:      'typing',
+          isOwn: false,
+          type: 'typing',
         };
       }
 
-      const timeString = new Date(msg.created_at!)
-        .toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      const timeString = new Date(msg.created_at!).toLocaleTimeString([], {
+        hour: '2-digit',
+        minute: '2-digit',
+      });
 
       const isOwn = msg.sender_name === session?.user?.name;
 
       if (msg.type === 'voice' && msg.media_url) {
         return {
-          id: msg.id, sender: msg.sender_name, timestamp: timeString,
-          isOwn, type: 'voice', voiceUrl: absolutize(msg.media_url),
+          id: msg.id,
+          sender: msg.sender_name,
+          timestamp: timeString,
+          isOwn,
+          type: 'voice',
+          voiceUrl: absolutize(msg.media_url),
         };
       }
 
       if (msg.type === 'file' && msg.media_url) {
         return {
-          id: msg.id, sender: msg.sender_name, timestamp: timeString,
-          isOwn, type: 'file',
-          fileUrl: absolutize(msg.media_url), filename: msg.filename,
+          id: msg.id,
+          sender: msg.sender_name,
+          timestamp: timeString,
+          isOwn,
+          type: 'file',
+          fileUrl: absolutize(msg.media_url),
+          filename: msg.filename,
         };
       }
 
-      /* text */
       return {
-        id: msg.id, sender: msg.sender_name, timestamp: timeString,
-        isOwn, type: 'text', text: msg.content ?? '',
+        id: msg.id,
+        sender: msg.sender_name,
+        timestamp: timeString,
+        isOwn,
+        type: 'text',
+        text: msg.content ?? '',
       };
     },
     [session, BACKEND_BASE],
   );
 
-  /* ───────── Pagination fetch ───────── */
   const loadMoreMessages = useCallback(async () => {
     if (!session || !hasMore) return;
 
@@ -115,7 +132,7 @@ export const ChatWindow = () => {
         console.error('Page fetch failed:', res.statusText);
         return;
       }
-      const data = await res.json();           // {results: [...]}
+      const data = await res.json();
 
       const converted = (data.results as RawMessage[])
         .reverse()
@@ -129,19 +146,20 @@ export const ChatWindow = () => {
     }
   }, [session, hasMore, offset, BACKEND_BASE, mapRaw]);
 
-  /* first page */
-  useEffect(() => { loadMoreMessages(); }, [loadMoreMessages]);
+  useEffect(() => {
+    loadMoreMessages();
+  }, [loadMoreMessages]);
 
-  /* infinite-scroll trigger */
   useEffect(() => {
     const box = scrollBoxRef.current;
     if (!box) return;
-    const onScroll = () => { if (box.scrollTop === 0) loadMoreMessages(); };
+    const onScroll = () => {
+      if (box.scrollTop === 0) loadMoreMessages();
+    };
     box.addEventListener('scroll', onScroll);
     return () => box.removeEventListener('scroll', onScroll);
   }, [loadMoreMessages]);
 
-  /* ───────── WebSocket ───────── */
   useEffect(() => {
     if (status !== 'authenticated') return;
 
@@ -153,17 +171,15 @@ export const ChatWindow = () => {
         const raw: RawMessage = JSON.parse(evt.data);
 
         setMessages(prev => {
-          // ⬇️ keep existing dots unless the *System* just answered
           const cleaned = prev.filter(
-            m => !(m.type === 'typing' && m.sender === raw.sender_name)
+            m =>
+              !(m.type === 'typing' && m.sender === raw.sender_name),
           );
 
-          // typing event → just append and keep waiting
           if (raw.type === 'typing') {
             return [...cleaned, mapRaw(raw)];
           }
 
-          // real reply → show it *after* removing the dots
           return [...cleaned, mapRaw(raw)];
         });
       } catch (err) {
@@ -171,61 +187,89 @@ export const ChatWindow = () => {
       }
     };
 
-    ws.onopen    = () => console.log('WS open');
-    ws.onerror   = err => console.error('WS error', err);
-    ws.onclose   = () => console.log('WS closed');
-    return ()    => ws.close();
+    ws.onopen = () => console.log('WS open');
+    ws.onerror = err => console.error('WS error', err);
+    ws.onclose = () => console.log('WS closed');
+    return () => ws.close();
   }, [status, WS_URL, mapRaw]);
 
-  /* ───────── Upload helpers (voice / file) ───────── */
-  const handleSendVoice = useCallback(async (blob: Blob) => {
-    if (!session?.user?.name) return;
-    const fd = new FormData();
-    fd.append('sender_name', session.user.name);
-    fd.append('voice_file', blob, `voice_${Date.now()}.webm`);
+  const handleSendVoice = useCallback(
+    async (blob: Blob) => {
+      if (!session?.user?.name) return;
+      const fd = new FormData();
+      fd.append('sender_name', session.user.name);
+      fd.append('voice_file', blob, `voice_${Date.now()}.webm`);
 
-    const res = await fetch(`${BACKEND_BASE}/voice_notes/`, { method: 'POST', body: fd });
-    if (!res.ok) { console.error(await res.text()); return; }
-    const saved = await res.json();
-    socket.current?.readyState === WebSocket.OPEN && socket.current.send(JSON.stringify(saved));
-  }, [session, BACKEND_BASE]);
+      const res = await fetch(`${BACKEND_BASE}/voice_notes/`, {
+        method: 'POST',
+        body: fd,
+      });
+      if (!res.ok) {
+        console.error(await res.text());
+        return;
+      }
+      const saved = await res.json();
+      socket.current?.readyState === WebSocket.OPEN &&
+        socket.current.send(JSON.stringify(saved));
+    },
+    [session, BACKEND_BASE],
+  );
 
-  const handleSendFile = useCallback(async (file: File) => {
-    if (!session?.user?.name) return;
-    const fd = new FormData();
-    fd.append('sender_name', session.user.name);
-    fd.append('file', file);
+  const handleSendFile = useCallback(
+    async (file: File) => {
+      if (!session?.user?.name) return;
+      const fd = new FormData();
+      fd.append('sender_name', session.user.name);
+      fd.append('file', file);
 
-    const res = await fetch(`${BACKEND_BASE}/files/`, { method: 'POST', body: fd });
-    if (!res.ok) { console.error(await res.text()); return; }
-    const saved = await res.json();
-    socket.current?.readyState === WebSocket.OPEN && socket.current.send(JSON.stringify(saved));
-  }, [session, BACKEND_BASE]);
+      const res = await fetch(`${BACKEND_BASE}/files/`, {
+        method: 'POST',
+        body: fd,
+      });
+      if (!res.ok) {
+        console.error(await res.text());
+        return;
+      }
+      const saved = await res.json();
+      socket.current?.readyState === WebSocket.OPEN &&
+        socket.current.send(JSON.stringify(saved));
+    },
+    [session, BACKEND_BASE],
+  );
 
-  /* ───────── Text message ───────── */
-  const handleSendText = useCallback(async (text: string) => {
-    if (!session?.user?.name) return;
+  const handleSendText = useCallback(
+    async (text: string) => {
+      if (!session?.user?.name) return;
 
-    const payload = { sender_name: session.user.name, content: text, type: 'text' };
+      const payload = {
+        sender_name: session.user.name,
+        content: text,
+        type: 'text',
+      };
 
-    const res = await fetch(`${BACKEND_BASE}/messages/`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    });
-    if (!res.ok) { console.error(await res.text()); return; }
+      const res = await fetch(`${BACKEND_BASE}/messages/`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) {
+        console.error(await res.text());
+        return;
+      }
 
-    const saved = await res.json();
-    socket.current?.readyState === WebSocket.OPEN &&
-      socket.current.send(JSON.stringify(saved));
-  }, [session, BACKEND_BASE]);
+      const saved = await res.json();
+      socket.current?.readyState === WebSocket.OPEN &&
+        socket.current.send(JSON.stringify(saved));
+    },
+    [session, BACKEND_BASE],
+  );
 
-  /* auto-scroll on new messages */
-  useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
 
   if (status === 'loading') return <div className="p-4">Loading…</div>;
 
-  /* ───────── UI ───────── */
   return (
     <div className="flex flex-col h-full bg-gradient-to-b from-gray-50 to-white">
       <div
