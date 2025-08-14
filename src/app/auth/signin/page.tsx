@@ -15,7 +15,7 @@ export default function SignInPage() {
           Collaborate, chat, and share files securely with your team. Please sign in with your Microsoft account to continue.
         </p>
         <button
-          onClick={() => signIn('azure-ad', { callbackUrl: '/chat' })}
+          onClick={() => signIn('azure-ad', { callbackUrl: '/input-data' })}
           className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold px-6 py-3 rounded-md transition flex items-center justify-center space-x-2"
         >
           <svg

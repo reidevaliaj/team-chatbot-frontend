@@ -54,8 +54,8 @@ export const ChatWindow = () => {
   const BACKEND_BASE = process.env.NEXT_PUBLIC_BACKEND_URL!;
   const WS_URL = process.env.NEXT_PUBLIC_WS_URL ??
     (process.env.NODE_ENV === 'production'
-      ? 'wss://team-chatbot-backend-django.fly.dev/ws/chat'
-      : 'ws://localhost:8000/ws/chat');
+      ? 'wss://team-chatbot-backend-django.fly.dev/ws/input-data'
+      : 'ws://localhost:8000/ws/input-data');
 
   const absolutize = (maybe: string | undefined) =>
     maybe && maybe.startsWith('/') ? `${BACKEND_BASE}${maybe}` : maybe ?? '';

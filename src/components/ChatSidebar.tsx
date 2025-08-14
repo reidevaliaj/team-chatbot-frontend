@@ -17,7 +17,7 @@ const sidebarItems: SidebarItem[] = [
   {
     icon: TrendingUp,
     title: 'Input-Data',
-    description: 'AI chat',
+    description: 'Input Data to Vector Database',
     path: '/input-data',
   },
   {

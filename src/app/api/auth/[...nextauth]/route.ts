@@ -19,7 +19,7 @@ export const authOptions = {
     },
       async redirect({ url, baseUrl }: any) {
       // Always redirect to /chat after login
-      return `${baseUrl}/chat`;
+      return `${baseUrl}/input-data`;
     },
   },
 };

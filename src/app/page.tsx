@@ -9,5 +9,5 @@ export default async function Home() {
     redirect("api/auth/signin");
   }
 
-  redirect("/chat");
+  redirect("/input-data");
 }
