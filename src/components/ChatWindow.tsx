@@ -64,8 +64,18 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
         ? 'wss://team-chatbot-backend-django.fly.dev/ws/input-data'
         : 'ws://localhost:8000/ws/input-data'));
 
-  const absolutize = (maybe: string | undefined) =>
-    maybe && maybe.startsWith('/') ? `${BACKEND_BASE}${maybe}` : maybe ?? '';
+  // ADD this: the pure origin of the backend (no /chatnow)
+  const BACKEND_ORIGIN = (() => {
+    try { return new URL(BACKEND_BASE).origin; }
+    catch { return BACKEND_BASE.split('/').slice(0, 3).join('/'); }
+  })();      
+
+  const absolutize = (maybe: string | undefined) => {
+    if (!maybe) return '';
+    if (/^https?:\/\//i.test(maybe)) return maybe; // already absolute
+    if (maybe.startsWith('/')) return `${BACKEND_ORIGIN}${maybe}`; // <-- key change
+    return `${BACKEND_BASE.replace(/\/$/, '')}/${maybe}`;
+  };
 
   const mapRaw = useCallback(
     (msg: RawMessage): Message => {
