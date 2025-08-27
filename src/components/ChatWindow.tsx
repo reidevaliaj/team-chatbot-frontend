@@ -53,12 +53,12 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   const socket = useRef<WebSocket | null>(null);
   const scrollBoxRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const topSentinelRef = useRef<HTMLDivElement>(null);
 
   // guards & helpers
   const isFetchingRef = useRef(false);
   const preserveOnPrepend = useRef(false);
   const seenIdsRef = useRef<Set<MsgID>>(new Set());
+  const didInitialLoadRef = useRef(false);
 
   const BACKEND_BASE =
     backendBase ?? process.env.NEXT_PUBLIC_BACKEND_URL!;
@@ -133,8 +133,16 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
         text: msg.content ?? '',
       };
     },
-    [session, BACKEND_BASE],
+    [session],
   );
+
+  // ---------- helpers ----------
+  const isNearBottom = () => {
+    const box = scrollBoxRef.current;
+    if (!box) return true;
+    const threshold = 120; // px
+    return box.scrollHeight - box.scrollTop - box.clientHeight < threshold;
+  };
 
   // ---------- fetching & pagination ----------
   const loadMoreMessages = useCallback(async () => {
@@ -161,7 +169,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   }, [session, hasMore, offset, BACKEND_BASE, mapRaw]);
 
   // preserve scroll position on history prepend
-  const loadMoreMessagesWrapped = useCallback(async () => {
+  const loadMoreWithPreserve = useCallback(async () => {
     const box = scrollBoxRef.current;
     if (!box) return;
 
@@ -179,38 +187,38 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     });
   }, [loadMoreMessages]);
 
-  // first page only when authenticated/ready
+  // initial page load ONCE after auth
   useEffect(() => {
-    if (status === 'authenticated') {
-      // reset on chat switch
-      setMessages([]);
-      setOffset(0);
-      setHasMore(true);
-      seenIdsRef.current.clear();
-      // prime first page
-      loadMoreMessagesWrapped();
-    }
-  }, [status, BACKEND_BASE, loadMoreMessagesWrapped]);
+    if (status !== 'authenticated') return;
+    if (didInitialLoadRef.current) return;
 
-  // intersection observer for top sentinel (load older messages)
+    // reset on mount/chat switch
+    setMessages([]);
+    setOffset(0);
+    setHasMore(true);
+    seenIdsRef.current.clear();
+
+    didInitialLoadRef.current = true;
+    // first page
+    loadMoreMessages();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [status]); // don't include loadMoreMessages here (prevents loops)
+
+  // load older messages when scrolled to top
   useEffect(() => {
-    const node = topSentinelRef.current;
-    const root = scrollBoxRef.current;
-    if (!node || !root) return;
+    const box = scrollBoxRef.current;
+    if (!box) return;
 
-    const io = new IntersectionObserver(
-      (entries) => {
-        const first = entries[0];
-        if (first.isIntersecting) {
-          loadMoreMessagesWrapped();
-        }
-      },
-      { root, rootMargin: '0px', threshold: 1 }
-    );
+    const onScroll = () => {
+      // small threshold helps when browser reports -0 or tiny values
+      if (box.scrollTop <= 2) {
+        loadMoreWithPreserve();
+      }
+    };
 
-    io.observe(node);
-    return () => io.disconnect();
-  }, [loadMoreMessagesWrapped]);
+    box.addEventListener('scroll', onScroll);
+    return () => box.removeEventListener('scroll', onScroll);
+  }, [loadMoreWithPreserve]);
 
   // ---------- websocket ----------
   useEffect(() => {
@@ -227,15 +235,18 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
         if (seenIdsRef.current.has(raw.id)) return;
         seenIdsRef.current.add(raw.id);
 
+        const shouldStickToBottom = isNearBottom() || raw.sender_name === session?.user?.name;
+
         setMessages(prev => {
           // remove existing typing from same sender
           const cleaned = prev.filter(m => !(m.type === 'typing' && m.sender === raw.sender_name));
           return [...cleaned, mapRaw(raw)];
         });
 
-        // if it's my own message, nudge to bottom
-        if (raw.sender_name === session?.user?.name) {
-          messagesEndRef.current?.scrollIntoView({ behavior: 'auto' });
+        if (shouldStickToBottom) {
+          requestAnimationFrame(() => {
+            messagesEndRef.current?.scrollIntoView({ behavior: 'auto' });
+          });
         }
       } catch (err) {
         console.error('Bad WS payload:', err);
@@ -316,14 +327,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     [session, BACKEND_BASE],
   );
 
-  // ---------- conditional autoscroll ----------
-  const isNearBottom = () => {
-    const box = scrollBoxRef.current;
-    if (!box) return true;
-    const threshold = 120; // px
-    return box.scrollHeight - box.scrollTop - box.clientHeight < threshold;
-  };
-
+  // ---------- conditional autoscroll on list changes ----------
   useEffect(() => {
     if (!preserveOnPrepend.current && isNearBottom()) {
       messagesEndRef.current?.scrollIntoView({ behavior: 'auto' });
@@ -338,9 +342,6 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
         ref={scrollBoxRef}
         className="flex-1 overflow-y-auto p-6 space-y-2"
       >
-        {/* sentinel must be the first item to detect "top reached" */}
-        <div ref={topSentinelRef} style={{ height: 1 }} />
-
         <div className="text-center py-4">
           <span className="inline-block bg-blue-50 text-blue-700 px-4 py-2 rounded-full text-sm">
             Welcome to Knowledge Hub
