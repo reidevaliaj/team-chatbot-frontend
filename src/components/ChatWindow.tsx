@@ -53,13 +53,16 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   const socket = useRef<WebSocket | null>(null);
   const scrollBoxRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const topSentinelRef = useRef<HTMLDivElement>(null);
 
   // guards & helpers
   const isFetchingRef = useRef(false);
   const preserveOnPrepend = useRef(false);
   const seenIdsRef = useRef<Set<MsgID>>(new Set());
   const didInitialLoadRef = useRef(false);
+
+  // Load-more only after the user actually scrolls upward once
+  const lastScrollTopRef = useRef(0);
+  const userRequestedHistoryRef = useRef(false);
 
   const BACKEND_BASE =
     backendBase ?? process.env.NEXT_PUBLIC_BACKEND_URL!;
@@ -198,6 +201,8 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     setOffset(0);
     setHasMore(true);
     seenIdsRef.current.clear();
+    userRequestedHistoryRef.current = false;
+    lastScrollTopRef.current = 0;
 
     didInitialLoadRef.current = true;
     // first page
@@ -205,28 +210,35 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status]); // do not include loadMoreMessages to avoid loops
 
-  // intersection observer for top sentinel (load older messages)
+  // load older messages ONLY when user scrolls UP and reaches near top
   useEffect(() => {
-    const node = topSentinelRef.current;
-    const root = scrollBoxRef.current;
-    if (!node || !root) return;
+    const box = scrollBoxRef.current;
+    if (!box) return;
 
-    const io = new IntersectionObserver(
-      (entries) => {
-        const first = entries[0];
-        if (first.isIntersecting && hasMore && !isFetchingRef.current) {
-          loadMoreWithPreserve();
-        }
-      },
-      {
-        root,
-        rootMargin: '50px', // start loading slightly before absolute top
-        threshold: 0,
+    const TOP_THRESHOLD = 30; // px from top
+    const onScroll = () => {
+      const curr = box.scrollTop;
+      const goingUp = curr < lastScrollTopRef.current;
+      lastScrollTopRef.current = curr;
+
+      // user has intentionally scrolled upward at least once
+      if (!userRequestedHistoryRef.current && goingUp) {
+        userRequestedHistoryRef.current = true;
       }
-    );
 
-    io.observe(node);
-    return () => io.disconnect();
+      if (
+        userRequestedHistoryRef.current &&
+        goingUp &&
+        curr <= TOP_THRESHOLD &&
+        hasMore &&
+        !isFetchingRef.current
+      ) {
+        loadMoreWithPreserve();
+      }
+    };
+
+    box.addEventListener('scroll', onScroll, { passive: true });
+    return () => box.removeEventListener('scroll', onScroll);
   }, [hasMore, loadMoreWithPreserve]);
 
   // ---------- websocket ----------
@@ -351,9 +363,6 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
         ref={scrollBoxRef}
         className="flex-1 overflow-y-auto p-6 space-y-2"
       >
-        {/* The sentinel MUST be the first element inside the scroll container */}
-        <div ref={topSentinelRef} style={{ height: 1 }} />
-
         <div className="text-center py-4">
           <span className="inline-block bg-blue-50 text-blue-700 px-4 py-2 rounded-full text-sm">
             Welcome to Knowledge Hub
