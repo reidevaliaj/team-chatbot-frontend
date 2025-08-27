@@ -53,6 +53,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   const socket = useRef<WebSocket | null>(null);
   const scrollBoxRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const topSentinelRef = useRef<HTMLDivElement>(null);
 
   // guards & helpers
   const isFetchingRef = useRef(false);
@@ -202,23 +203,31 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     // first page
     loadMoreMessages();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [status]); // don't include loadMoreMessages here (prevents loops)
+  }, [status]); // do not include loadMoreMessages to avoid loops
 
-  // load older messages when scrolled to top
+  // intersection observer for top sentinel (load older messages)
   useEffect(() => {
-    const box = scrollBoxRef.current;
-    if (!box) return;
+    const node = topSentinelRef.current;
+    const root = scrollBoxRef.current;
+    if (!node || !root) return;
 
-    const onScroll = () => {
-      // small threshold helps when browser reports -0 or tiny values
-      if (box.scrollTop <= 2) {
-        loadMoreWithPreserve();
+    const io = new IntersectionObserver(
+      (entries) => {
+        const first = entries[0];
+        if (first.isIntersecting && hasMore && !isFetchingRef.current) {
+          loadMoreWithPreserve();
+        }
+      },
+      {
+        root,
+        rootMargin: '50px', // start loading slightly before absolute top
+        threshold: 0,
       }
-    };
+    );
 
-    box.addEventListener('scroll', onScroll);
-    return () => box.removeEventListener('scroll', onScroll);
-  }, [loadMoreWithPreserve]);
+    io.observe(node);
+    return () => io.disconnect();
+  }, [hasMore, loadMoreWithPreserve]);
 
   // ---------- websocket ----------
   useEffect(() => {
@@ -342,6 +351,9 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
         ref={scrollBoxRef}
         className="flex-1 overflow-y-auto p-6 space-y-2"
       >
+        {/* The sentinel MUST be the first element inside the scroll container */}
+        <div ref={topSentinelRef} style={{ height: 1 }} />
+
         <div className="text-center py-4">
           <span className="inline-block bg-blue-50 text-blue-700 px-4 py-2 rounded-full text-sm">
             Welcome to Knowledge Hub
