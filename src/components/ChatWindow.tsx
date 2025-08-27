@@ -46,7 +46,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   const { data: session, status } = useSession();
 
   const [messages, setMessages] = useState<Message[]>([]);
-  const [offset, setOffset] = useState(0);
+  const offsetRef = useRef(0);
   const [hasMore, setHasMore] = useState(true);
   const LIMIT = 20;
 
@@ -70,12 +70,15 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     catch { return BACKEND_BASE.split('/').slice(0, 3).join('/'); }
   })();      
 
-  const absolutize = (maybe: string | undefined) => {
-    if (!maybe) return '';
-    if (/^https?:\/\//i.test(maybe)) return maybe; // already absolute
-    if (maybe.startsWith('/')) return `${BACKEND_ORIGIN}${maybe}`; // <-- key change
-    return `${BACKEND_BASE.replace(/\/$/, '')}/${maybe}`;
-  };
+  const absolutize = useCallback(
+    (maybe: string | undefined) => {
+      if (!maybe) return '';
+      if (/^https?:\/\//i.test(maybe)) return maybe; // already absolute
+      if (maybe.startsWith('/')) return `${BACKEND_ORIGIN}${maybe}`; // <-- key change
+      return `${BACKEND_BASE.replace(/\/$/, '')}/${maybe}`;
+    },
+    [BACKEND_ORIGIN, BACKEND_BASE],
+  );
 
   const mapRaw = useCallback(
     (msg: RawMessage): Message => {
@@ -128,7 +131,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
         text: msg.content ?? '',
       };
     },
-    [session, BACKEND_BASE],
+     [session, absolutize],
   );
 
   const loadMoreMessages = useCallback(async () => {
@@ -136,7 +139,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
 
     try {
       const res = await fetch(
-        `${BACKEND_BASE}/messages/?limit=${LIMIT}&offset=${offset}`,
+        `${BACKEND_BASE}/messages/?limit=${LIMIT}&offset=${offsetRef.current}`,
       );
       if (!res.ok) {
         console.error('Page fetch failed:', res.statusText);
@@ -150,15 +153,18 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
 
       setMessages(prev => [...converted, ...prev]);
       if (data.results.length < LIMIT) setHasMore(false);
-      setOffset(prev => prev + LIMIT);
+      offsetRef.current += LIMIT;
     } catch (e) {
       console.error('Pagination error:', e);
     }
-  }, [session, hasMore, offset, BACKEND_BASE, mapRaw]);
+ }, [session, hasMore, BACKEND_BASE, mapRaw]);
 
   useEffect(() => {
-    loadMoreMessages();
-  }, [loadMoreMessages]);
+     if (session) {
+      loadMoreMessages();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session]);
 
   useEffect(() => {
     const box = scrollBoxRef.current;
@@ -219,8 +225,9 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
         return;
       }
       const saved = await res.json();
-      socket.current?.readyState === WebSocket.OPEN &&
+      if (socket.current?.readyState === WebSocket.OPEN) {
         socket.current.send(JSON.stringify(saved));
+      }
     },
     [session, BACKEND_BASE],
   );
@@ -241,8 +248,9 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
         return;
       }
       const saved = await res.json();
-      socket.current?.readyState === WebSocket.OPEN &&
+      if (socket.current?.readyState === WebSocket.OPEN) {
         socket.current.send(JSON.stringify(saved));
+      }
     },
     [session, BACKEND_BASE],
   );
@@ -268,8 +276,9 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
       }
 
       const saved = await res.json();
-      socket.current?.readyState === WebSocket.OPEN &&
+       if (socket.current?.readyState === WebSocket.OPEN) {
         socket.current.send(JSON.stringify(saved));
+      }
     },
     [session, BACKEND_BASE],
   );
