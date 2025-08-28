@@ -60,10 +60,6 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   const seenIdsRef = useRef<Set<MsgID>>(new Set());
   const didInitialLoadRef = useRef(false);
 
-  // Load-more only after the user actually scrolls upward once
-  const lastScrollTopRef = useRef(0);
-  const userRequestedHistoryRef = useRef(false);
-
   const BACKEND_BASE =
     backendBase ?? process.env.NEXT_PUBLIC_BACKEND_URL!;
 
@@ -150,25 +146,35 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
 
   // ---------- fetching & pagination ----------
   const loadMoreMessages = useCallback(async () => {
-    if (!session || !hasMore || isFetchingRef.current) return;
+    if (!session || !hasMore || isFetchingRef.current) {
+      console.log('[loadMore] bail', { hasSession: !!session, hasMore, isFetching: isFetchingRef.current });
+      return;
+    }
     isFetchingRef.current = true;
+    console.log('[loadMore] fetching', { offset, limit: LIMIT, url: `${BACKEND_BASE}/messages/?limit=${LIMIT}&offset=${offset}` });
+
     try {
       const res = await fetch(`${BACKEND_BASE}/messages/?limit=${LIMIT}&offset=${offset}`);
       if (!res.ok) {
-        console.error('Page fetch failed:', res.statusText);
+        console.error('[loadMore] Page fetch failed:', res.status, res.statusText);
         return;
       }
       const data = await res.json();
+      console.log('[loadMore] response', { got: data?.results?.length ?? 0 });
 
       const converted = (data.results as RawMessage[]).reverse().map(mapRaw);
       setMessages(prev => [...converted, ...prev]);
 
-      if (data.results.length < LIMIT) setHasMore(false);
+      if (!Array.isArray(data.results) || data.results.length < LIMIT) {
+        console.log('[loadMore] no more pages');
+        setHasMore(false);
+      }
       setOffset(prev => prev + LIMIT);
     } catch (e) {
-      console.error('Pagination error:', e);
+      console.error('[loadMore] Pagination error:', e);
     } finally {
       isFetchingRef.current = false;
+      console.log('[loadMore] done');
     }
   }, [session, hasMore, offset, BACKEND_BASE, mapRaw]);
 
@@ -179,6 +185,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
 
     const prevScrollHeight = box.scrollHeight;
     const prevTop = box.scrollTop;
+    console.log('[prepend] before', { prevScrollHeight, prevTop });
 
     preserveOnPrepend.current = true;
     await loadMoreMessages();
@@ -188,6 +195,11 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
       const delta = box.scrollHeight - prevScrollHeight;
       box.scrollTop = prevTop + delta;
       preserveOnPrepend.current = false;
+      console.log('[prepend] after', {
+        newScrollHeight: box.scrollHeight,
+        delta,
+        newTop: box.scrollTop,
+      });
     });
   }, [loadMoreMessages]);
 
@@ -196,45 +208,34 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     if (status !== 'authenticated') return;
     if (didInitialLoadRef.current) return;
 
+    console.log('[init] first page load');
+
     // reset on mount/chat switch
     setMessages([]);
     setOffset(0);
     setHasMore(true);
     seenIdsRef.current.clear();
-    userRequestedHistoryRef.current = false;
-    lastScrollTopRef.current = 0;
 
     didInitialLoadRef.current = true;
-    // first page
     loadMoreMessages();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [status]); // do not include loadMoreMessages to avoid loops
+  }, [status]);
 
-  // load older messages ONLY when user scrolls UP and reaches near top
+  // load older messages when user is near the top (no direction gate)
   useEffect(() => {
     const box = scrollBoxRef.current;
     if (!box) return;
 
-    const TOP_THRESHOLD = 30; // px from top
+    const TOP_THRESHOLD = 250; // px
     const onScroll = () => {
-      const box = scrollBoxRef.current!;
-      console.log('scrollTop:', box.scrollTop, 'clientHeight:', box.clientHeight, 'scrollHeight:', box.scrollHeight);
-      const curr = box.scrollTop;
-      const goingUp = curr < lastScrollTopRef.current;
-      lastScrollTopRef.current = curr;
+      const st = box.scrollTop;
+      const ch = box.clientHeight;
+      const sh = box.scrollHeight;
+      // logs every scroll – feel free to throttle if too noisy
+      console.log('[scroll]', { scrollTop: st, clientHeight: ch, scrollHeight: sh });
 
-      // user has intentionally scrolled upward at least once
-      if (!userRequestedHistoryRef.current && goingUp) {
-        userRequestedHistoryRef.current = true;
-      }
-
-      if (
-        userRequestedHistoryRef.current &&
-        goingUp &&
-        curr <= TOP_THRESHOLD &&
-        hasMore &&
-        !isFetchingRef.current
-      ) {
+      if (st <= TOP_THRESHOLD && hasMore && !isFetchingRef.current) {
+        console.log('[scroll] near top → load more');
         loadMoreWithPreserve();
       }
     };
@@ -254,14 +255,12 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
       try {
         const raw: RawMessage = JSON.parse(evt.data);
 
-        // de-dupe by id
         if (seenIdsRef.current.has(raw.id)) return;
         seenIdsRef.current.add(raw.id);
 
         const shouldStickToBottom = isNearBottom() || raw.sender_name === session?.user?.name;
 
         setMessages(prev => {
-          // remove existing typing from same sender
           const cleaned = prev.filter(m => !(m.type === 'typing' && m.sender === raw.sender_name));
           return [...cleaned, mapRaw(raw)];
         });
@@ -297,7 +296,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
         return;
       }
       const saved: RawMessage = await res.json();
-      seenIdsRef.current.add(saved.id); // avoid echo dup
+      seenIdsRef.current.add(saved.id);
       if (socket.current?.readyState === WebSocket.OPEN) {
         socket.current.send(JSON.stringify(saved));
       }
@@ -318,7 +317,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
         return;
       }
       const saved: RawMessage = await res.json();
-      seenIdsRef.current.add(saved.id); // avoid echo dup
+      seenIdsRef.current.add(saved.id);
       if (socket.current?.readyState === WebSocket.OPEN) {
         socket.current.send(JSON.stringify(saved));
       }
@@ -342,7 +341,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
         return;
       }
       const saved: RawMessage = await res.json();
-      seenIdsRef.current.add(saved.id); // avoid echo dup
+      seenIdsRef.current.add(saved.id);
       if (socket.current?.readyState === WebSocket.OPEN) {
         socket.current.send(JSON.stringify(saved));
       }
@@ -350,7 +349,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     [session, BACKEND_BASE],
   );
 
-  // ---------- conditional autoscroll on list changes ----------
+  // ---------- conditional autoscroll ----------
   useEffect(() => {
     if (!preserveOnPrepend.current && isNearBottom()) {
       messagesEndRef.current?.scrollIntoView({ behavior: 'auto' });
@@ -370,6 +369,18 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
             Welcome to Knowledge Hub
           </span>
         </div>
+
+        {/* TEMP: Manual trigger for debugging */}
+        {hasMore && (
+          <div className="flex justify-center mb-2">
+            <button
+              onClick={loadMoreWithPreserve}
+              className="text-xs px-3 py-1 rounded border border-gray-300 hover:bg-gray-50"
+            >
+              Load older (debug)
+            </button>
+          </div>
+        )}
 
         {messages.map(m => (
           <MessageBubble key={`${m.id}`} message={m} />
