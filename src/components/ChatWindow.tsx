@@ -217,6 +217,8 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
 
     const TOP_THRESHOLD = 30; // px from top
     const onScroll = () => {
+      const box = scrollBoxRef.current!;
+      console.log('scrollTop:', box.scrollTop, 'clientHeight:', box.clientHeight, 'scrollHeight:', box.scrollHeight);
       const curr = box.scrollTop;
       const goingUp = curr < lastScrollTopRef.current;
       lastScrollTopRef.current = curr;
